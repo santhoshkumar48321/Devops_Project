@@ -1,0 +1,9 @@
+# ============================================================
+# Trivy Ignore — suppress known false positives
+# ============================================================
+# Add CVE IDs here only when you've verified they're not
+# applicable to your use case. Document WHY for each.
+# ============================================================
+
+# Example (uncomment when needed):
+# CVE-2024-XXXXX  # Not applicable: we don't use the affected feature

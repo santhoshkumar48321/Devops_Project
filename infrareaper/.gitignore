@@ -1,0 +1,71 @@
+# ============================================================
+# InfraReaper .gitignore
+# ============================================================
+
+# ----- Terraform -----
+# State files contain sensitive data (passwords, keys, IPs)
+# NEVER commit these — state lives in Azure Storage (remote backend)
+*.tfstate
+*.tfstate.*
+*.tfplan
+.terraform/
+.terraform.lock.hcl
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+*.tfvars
+!example.tfvars
+
+# ----- Ansible -----
+# Vault passwords and retry files
+*.retry
+ansible/vault_password
+ansible/.vault_pass
+
+# ----- Docker -----
+# Don't commit built images or Docker-in-Docker sockets
+docker-compose.override.yml
+
+# ----- Kubernetes -----
+# Generated manifests and kubeconfig
+kubeconfig
+*.kubeconfig
+kustomize-build/
+
+# ----- Secrets & Credentials -----
+# CRITICAL: Never commit secrets
+.env
+.env.*
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+credentials/
+**/secret*.yaml
+!**/external-secret.yaml
+
+# ----- IDE & OS -----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ----- Logs & Temp -----
+*.log
+tmp/
+temp/
+*.tmp
+
+# ----- Python (pre-commit uses Python) -----
+__pycache__/
+*.pyc
+.venv/
+venv/
