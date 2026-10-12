@@ -1,0 +1,66 @@
+# ============================================================
+# Pre-commit hooks — catch issues BEFORE they enter Git history
+# ============================================================
+# WHY PRE-COMMIT?
+# Without pre-commit, a developer might commit a 2 GB .tfstate file,
+# a secret in plain text, or broken YAML. Pre-commit catches these
+# on your machine BEFORE 'git commit' succeeds.
+#
+# INSTALL:
+#   pip install pre-commit
+#   pre-commit install          (installs hooks into .git/hooks/)
+#   pre-commit run --all-files  (test all hooks on existing files)
+# ============================================================
+
+repos:
+  # ---- General file checks ----
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace        # Remove trailing spaces
+      - id: end-of-file-fixer          # Ensure files end with newline
+      - id: check-yaml                 # Validate YAML syntax
+        args: ['--allow-multiple-documents']
+      - id: check-json                 # Validate JSON syntax
+      - id: check-merge-conflict       # Catch unresolved merge markers
+      - id: detect-private-key         # Block private keys from commits
+      - id: check-added-large-files    # Block files > 500KB (catches .tfstate)
+        args: ['--maxkb=500']
+      - id: no-commit-to-branch        # Block direct commits to main
+        args: ['--branch', 'main']
+
+  # ---- Shell script linting ----
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        args: ['--severity=warning']   # Catch warnings and above
+
+  # ---- Terraform formatting ----
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.96.1
+    hooks:
+      - id: terraform_fmt              # Auto-format Terraform files
+      - id: terraform_validate         # Validate Terraform syntax
+      - id: terraform_tflint           # Lint Terraform best practices
+
+  # ---- Dockerfile linting ----
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint
+        args: ['--ignore', 'DL3008']   # Don't require version pinning for apt
+
+  # ---- YAML linting ----
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        args: ['-d', '{extends: relaxed, rules: {line-length: {max: 150}}}']
+
+  # ---- Detect secrets ----
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
