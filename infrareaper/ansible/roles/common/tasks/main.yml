@@ -1,0 +1,328 @@
+# ============================================================
+# Role: common — Tasks
+# ============================================================
+# This file contains ALL tasks for the 'common' role.
+# Tasks run in order, top to bottom.
+#
+# TASK ANATOMY:
+#   - name: "Human-readable description"  ← shows in output
+#     module_name:                         ← what Ansible module to use
+#       param1: value                      ← module-specific parameters
+#     when: condition                      ← optional: only run if true
+#
+# COMMON MODULES WE USE:
+#   apt         → install/remove packages (like 'sudo apt install')
+#   apt_key     → add GPG keys for repos (like 'curl ... | apt-key add')
+#   apt_repository → add apt sources (like editing sources.list)
+#   get_url     → download files (like 'wget' or 'curl -o')
+#   unarchive   → extract tar/zip files
+#   command     → run any shell command (use as last resort)
+#   copy        → copy files to the target
+#   file        → create directories, set permissions
+#   timezone    → set system timezone
+#   stat        → check if a file/directory exists
+# ============================================================
+
+---
+# ──────────────────────────────────────────────
+# SECTION 1: System Configuration
+# ──────────────────────────────────────────────
+
+- name: Set timezone to {{ common_timezone }}
+  # WHY: Consistent timestamps in logs, cron schedules, and scan reports.
+  # Without this, your server might be in UTC while you're in IST.
+  ansible.builtin.timezone:
+    name: "{{ common_timezone }}"
+
+- name: Update apt package cache
+  # WHY: Like running 'sudo apt update' — refreshes the list of available packages.
+  # cache_valid_time=3600 means: skip if cache was updated in the last hour.
+  # This prevents hitting apt servers on every playbook run.
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Upgrade all installed packages
+  # WHY: Like running 'sudo apt upgrade -y' — keeps the OS patched.
+  # 'dist' upgrade handles dependency changes (safer than 'yes').
+  ansible.builtin.apt:
+    upgrade: dist
+  tags: [upgrade]
+
+# ──────────────────────────────────────────────
+# SECTION 2: Core Packages via apt
+# ──────────────────────────────────────────────
+
+- name: Install core apt packages
+  # WHY: These are the base tools everything else depends on.
+  # The list comes from defaults/main.yml (common_apt_packages variable).
+  # Ansible checks each package — if already installed, it skips it.
+  ansible.builtin.apt:
+    name: "{{ common_apt_packages }}"
+    state: present
+  # 'state: present' = install if missing, leave alone if installed
+  # 'state: latest'  = install AND upgrade to newest version
+  # 'state: absent'  = remove the package
+
+# ──────────────────────────────────────────────
+# SECTION 3: Azure CLI
+# ──────────────────────────────────────────────
+# Install method: Microsoft's official apt repository
+# Docs: https://learn.microsoft.com/en-us/cli/azure/install-azure-cli-linux
+#
+# Steps:
+#   1. Add Microsoft's GPG signing key (so apt trusts their packages)
+#   2. Add their apt repository (so apt knows where to download from)
+#   3. Install the 'azure-cli' package
+
+- name: Download Microsoft signing key
+  ansible.builtin.get_url:
+    url: https://packages.microsoft.com/keys/microsoft.asc
+    dest: /tmp/microsoft.asc
+    mode: "0644"
+
+- name: Add Microsoft GPG key to apt keyring
+  # WHY: apt needs to verify that packages actually come from Microsoft.
+  # The GPG key is Microsoft's "signature" — apt checks it before installing.
+  ansible.builtin.shell: |
+    cat /tmp/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-archive-keyring.gpg
+  args:
+    creates: /usr/share/keyrings/microsoft-archive-keyring.gpg
+  # 'creates:' makes this IDEMPOTENT — if the keyring file already exists,
+  # Ansible skips this task. Without it, the task would run every time.
+
+- name: Add Azure CLI apt repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-archive-keyring.gpg]
+      https://packages.microsoft.com/repos/azure-cli/
+      {{ ansible_distribution_release }} main
+    filename: azure-cli
+    state: present
+  # 'ansible_distribution_release' is a FACT — Ansible auto-detects it.
+  # On Ubuntu 24.04, this evaluates to 'noble'.
+  # So the final repo line becomes:
+  #   deb [arch=amd64 ...] https://packages.microsoft.com/.../azure-cli/ noble main
+
+- name: Install Azure CLI
+  ansible.builtin.apt:
+    name: azure-cli
+    state: present
+    update_cache: true
+
+- name: Verify Azure CLI installation
+  ansible.builtin.command: az version --output json
+  register: az_version_result
+  changed_when: false
+  # 'register:' saves the command output in a variable (az_version_result)
+  # 'changed_when: false' tells Ansible "this command doesn't change anything"
+  #   — it's just a check, so don't show it as yellow "changed"
+
+- name: Display Azure CLI version
+  ansible.builtin.debug:
+    msg: "Azure CLI installed: {{ (az_version_result.stdout | from_json)['azure-cli'] }}"
+
+# ──────────────────────────────────────────────
+# SECTION 4: Terraform
+# ──────────────────────────────────────────────
+# Install method: Direct binary download from HashiCorp
+# WHY not apt? HashiCorp's apt repo works, but downloading the
+# binary directly gives us exact version control.
+#
+# Steps:
+#   1. Download the zip file for the specific version
+#   2. Extract it to /usr/local/bin/ (on the system PATH)
+
+- name: Check if Terraform is already installed at correct version
+  ansible.builtin.command: terraform version -json
+  register: terraform_check
+  changed_when: false
+  failed_when: false
+  # 'failed_when: false' means: don't fail if terraform isn't installed yet.
+  # We're just checking — if it fails, we'll install it in the next task.
+
+- name: Download and install Terraform {{ common_terraform_version }}
+  ansible.builtin.unarchive:
+    src: "https://releases.hashicorp.com/terraform/{{ common_terraform_version }}/terraform_{{ common_terraform_version }}_linux_amd64.zip"
+    dest: /usr/local/bin/
+    remote_src: true
+    mode: "0755"
+  when: >
+    terraform_check.rc != 0 or
+    common_terraform_version not in (terraform_check.stdout | default(''))
+  # 'remote_src: true' means: the source is a URL, download it.
+  # 'when:' only runs this task if terraform is missing OR wrong version.
+  # This makes it idempotent — won't re-download on every run.
+
+- name: Verify Terraform installation
+  ansible.builtin.command: terraform version
+  register: terraform_version_result
+  changed_when: false
+
+- name: Display Terraform version
+  ansible.builtin.debug:
+    msg: "{{ terraform_version_result.stdout_lines[0] }}"
+
+# ──────────────────────────────────────────────
+# SECTION 5: kubectl
+# ──────────────────────────────────────────────
+# Install method: Kubernetes official apt repository
+# Docs: https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/
+
+- name: Download Kubernetes signing key
+  ansible.builtin.get_url:
+    url: https://pkgs.k8s.io/core:/stable:/v1.33/deb/Release.key
+    dest: /tmp/kubernetes.asc
+    mode: "0644"
+
+- name: Add Kubernetes GPG key to apt keyring
+  ansible.builtin.shell: |
+    cat /tmp/kubernetes.asc | gpg --dearmor -o /usr/share/keyrings/kubernetes-archive-keyring.gpg
+  args:
+    creates: /usr/share/keyrings/kubernetes-archive-keyring.gpg
+
+- name: Add Kubernetes apt repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg]
+      https://pkgs.k8s.io/core:/stable:/v1.33/deb/ /
+    filename: kubernetes
+    state: present
+
+- name: Install kubectl
+  ansible.builtin.apt:
+    name: kubectl
+    state: present
+    update_cache: true
+
+- name: Verify kubectl installation
+  ansible.builtin.command: kubectl version --client --output=json
+  register: kubectl_version_result
+  changed_when: false
+
+- name: Display kubectl version
+  ansible.builtin.debug:
+    msg: "kubectl installed: {{ (kubectl_version_result.stdout | from_json).clientVersion.gitVersion }}"
+
+# ──────────────────────────────────────────────
+# SECTION 6: Helm
+# ──────────────────────────────────────────────
+# Install method: Direct binary download
+# WHY Helm? You'll use it to install Prometheus, Grafana, and Loki
+# on AKS in Phases 11-12. Helm is the "package manager for Kubernetes."
+
+- name: Check if Helm is already installed at correct version
+  ansible.builtin.command: helm version --template "{{ '{{' }}.Version{{ '}}' }}"
+  register: helm_check
+  changed_when: false
+  failed_when: false
+
+- name: Download and install Helm {{ common_helm_version }}
+  ansible.builtin.unarchive:
+    src: "https://get.helm.sh/helm-v{{ common_helm_version }}-linux-amd64.tar.gz"
+    dest: /tmp/
+    remote_src: true
+  when: >
+    helm_check.rc != 0 or
+    common_helm_version not in (helm_check.stdout | default(''))
+
+- name: Move Helm binary to /usr/local/bin
+  ansible.builtin.copy:
+    src: /tmp/linux-amd64/helm
+    dest: /usr/local/bin/helm
+    mode: "0755"
+    remote_src: true
+  when: >
+    helm_check.rc != 0 or
+    common_helm_version not in (helm_check.stdout | default(''))
+
+- name: Verify Helm installation
+  ansible.builtin.command: helm version --short
+  register: helm_version_result
+  changed_when: false
+
+- name: Display Helm version
+  ansible.builtin.debug:
+    msg: "Helm installed: {{ helm_version_result.stdout }}"
+
+# ──────────────────────────────────────────────
+# SECTION 7: Trivy (vulnerability scanner)
+# ──────────────────────────────────────────────
+# Install method: Aqua Security apt repository
+# WHY Trivy? Scans Docker images AND Terraform/K8s configs
+# for security vulnerabilities. Used in CI/CD pipeline (Phase 9).
+
+- name: Download Trivy GPG key
+  ansible.builtin.get_url:
+    url: https://aquasecurity.github.io/trivy-repo/deb/public.key
+    dest: /tmp/trivy.asc
+    mode: "0644"
+
+- name: Add Trivy GPG key to apt keyring
+  ansible.builtin.shell: |
+    cat /tmp/trivy.asc | gpg --dearmor -o /usr/share/keyrings/trivy-archive-keyring.gpg
+  args:
+    creates: /usr/share/keyrings/trivy-archive-keyring.gpg
+
+- name: Add Trivy apt repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [signed-by=/usr/share/keyrings/trivy-archive-keyring.gpg]
+      https://aquasecurity.github.io/trivy-repo/deb
+      {{ ansible_distribution_release }} main
+    filename: trivy
+    state: present
+
+- name: Install Trivy
+  ansible.builtin.apt:
+    name: trivy
+    state: present
+    update_cache: true
+
+- name: Verify Trivy installation
+  ansible.builtin.command: trivy version
+  register: trivy_version_result
+  changed_when: false
+
+- name: Display Trivy version
+  ansible.builtin.debug:
+    msg: "{{ trivy_version_result.stdout_lines[0] | default(trivy_version_result.stdout) }}"
+
+# ──────────────────────────────────────────────
+# SECTION 8: ShellCheck (Bash linter)
+# ──────────────────────────────────────────────
+# Install method: apt (Ubuntu repo has a recent enough version)
+# WHY ShellCheck? Catches bugs in your Bash scripts before runtime.
+# The Makefile's 'make lint-shell' target uses this.
+
+- name: Install ShellCheck
+  ansible.builtin.apt:
+    name: shellcheck
+    state: present
+
+- name: Verify ShellCheck installation
+  ansible.builtin.command: shellcheck --version
+  register: shellcheck_version_result
+  changed_when: false
+
+- name: Display ShellCheck version
+  ansible.builtin.debug:
+    msg: "ShellCheck installed: {{ shellcheck_version_result.stdout_lines[1] | default(shellcheck_version_result.stdout) }}"
+
+# ──────────────────────────────────────────────
+# SECTION 9: Final Summary
+# ──────────────────────────────────────────────
+
+- name: Print setup summary
+  ansible.builtin.debug:
+    msg:
+      - "============================================"
+      - "  InfraReaper Lab Server — Common Role Done "
+      - "============================================"
+      - "  Timezone:    {{ common_timezone }}"
+      - "  Terraform:   {{ terraform_version_result.stdout_lines[0] }}"
+      - "  Helm:        {{ helm_version_result.stdout }}"
+      - "  ShellCheck:  {{ shellcheck_version_result.stdout_lines[1] | default('installed') }}"
+      - "============================================"
+      - "  Next: Run with docker + security roles    "
+      - "============================================"

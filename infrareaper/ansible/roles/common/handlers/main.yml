@@ -1,0 +1,23 @@
+# ============================================================
+# Role: common — Handlers
+# ============================================================
+# WHAT IS A HANDLER?
+#   A handler is a task that only runs when NOTIFIED.
+#   Normal tasks run every time. Handlers run only when
+#   something actually changes.
+#
+# EXAMPLE:
+#   If a task updates a config file and "notifies: Restart service",
+#   the handler runs at the END of all tasks (not immediately).
+#   If the config file didn't change → handler doesn't run.
+#
+# WHY?
+#   You don't want to restart a service 5 times if 5 tasks
+#   change its config. Handlers collect all notifications and
+#   run ONCE at the end.
+# ============================================================
+
+---
+# No handlers needed for the common role right now.
+# We'll add handlers in the docker and security roles where
+# service restarts are needed (e.g., restart Docker, restart SSH).
