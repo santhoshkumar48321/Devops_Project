@@ -1,0 +1,19 @@
+# ============================================================
+# Role: docker — Handlers
+# ============================================================
+# Handlers are only triggered if a task notifies them.
+# Example: If /etc/docker/daemon.json changes, Docker must restart.
+# ============================================================
+
+---
+- name: Restart Docker
+  ansible.builtin.systemd:
+    name: docker
+    state: restarted
+    daemon_reload: true
+
+- name: Restart containerd
+  ansible.builtin.systemd:
+    name: containerd
+    state: restarted
+

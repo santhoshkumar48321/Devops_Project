@@ -1,0 +1,40 @@
+# ============================================================
+# Role: docker — Default Variables
+# ============================================================
+# These are the DEFAULT values for the Docker role.
+#
+# WHY defaults/main.yml?
+#   Keeps package names, target users, and daemon configurations
+#   in one centralized place rather than hardcoding in tasks.
+# ============================================================
+
+---
+# --- Docker Packages ---
+# Standard Docker Engine packages from Docker's official apt repository.
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+
+# --- Users to add to the 'docker' group ---
+# Adding users to this group allows them to run 'docker' commands
+# without 'sudo'. Essential for the Azure DevOps agent!
+docker_users:
+  - "{{ ansible_user | default('santhosh') }}"
+
+# --- Docker Daemon Configuration ---
+# Config written to /etc/docker/daemon.json
+# Crucial in DevOps/production to prevent Docker container logs
+# from filling up the entire server disk.
+docker_daemon_config:
+  log-driver: "json-file"
+  log-opts:
+    max-size: "10m"
+    max-file: "3"
+
+# --- Service State ---
+docker_service_state: started
+docker_service_enabled: true
+
