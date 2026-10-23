@@ -42,8 +42,8 @@
       tags: [docker]
     - role: security
       tags: [security, hardening]
-    # - role: azdo-agent
-    #   tags: [agent, azdo]
+    - role: azdo-agent
+      tags: [agent, azdo]
 
 # ============================================================
 # TAGS — Run only specific roles:

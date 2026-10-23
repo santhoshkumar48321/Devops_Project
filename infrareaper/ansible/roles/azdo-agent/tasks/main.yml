@@ -1,0 +1,137 @@
+# ============================================================
+# Role: azdo-agent — Tasks
+# ============================================================
+# Downloads, configures, and registers the Azure Pipelines
+# self-hosted build agent as a systemd background service.
+# ============================================================
+
+---
+# ──────────────────────────────────────────────
+# SECTION 1: Check Current Agent Status
+# ──────────────────────────────────────────────
+
+- name: Check if agent is already configured
+  ansible.builtin.stat:
+    path: "{{ azdo_agent_dir }}/.agent"
+  register: azdo_agent_config_file
+
+- name: Check if agent systemd service exists
+  ansible.builtin.find:
+    paths: /etc/systemd/system
+    patterns: "vsts.agent.*.service"
+  register: azdo_service_files
+
+- name: Validate required registration variables
+  ansible.builtin.assert:
+    that:
+      - azdo_org_url | length > 0
+      - azdo_pat_token | length > 0
+    fail_msg: >
+      Azure DevOps registration credentials missing!
+      Please provide azdo_org_url and azdo_pat_token:
+      ansible-playbook playbooks/setup-lab-server.yml --tags azdo
+      -e "azdo_org_url=https://dev.azure.com/<your-org>"
+      -e "azdo_pat_token=<your-pat-token>"
+    success_msg: "Azure DevOps credentials supplied."
+  when: not azdo_agent_config_file.stat.exists
+
+# ──────────────────────────────────────────────
+# SECTION 2: Install Agent Package & Dependencies
+# ──────────────────────────────────────────────
+
+- name: Install agent OS prerequisites
+  ansible.builtin.apt:
+    name:
+      - curl
+      - tar
+      - jq
+      - libicu-dev
+      - libssl-dev
+    state: present
+    update_cache: true
+
+- name: Ensure agent installation directory exists
+  ansible.builtin.file:
+    path: "{{ azdo_agent_dir }}"
+    state: directory
+    owner: "{{ azdo_agent_user }}"
+    group: "{{ azdo_agent_user }}"
+    mode: "0755"
+
+- name: Download and extract Azure Pipelines agent package
+  ansible.builtin.unarchive:
+    src: "{{ azdo_agent_url }}"
+    dest: "{{ azdo_agent_dir }}"
+    remote_src: true
+    owner: "{{ azdo_agent_user }}"
+    group: "{{ azdo_agent_user }}"
+  when: not azdo_agent_config_file.stat.exists
+
+- name: Run agent dependency installer script
+  ansible.builtin.command: ./bin/installdependencies.sh
+  args:
+    chdir: "{{ azdo_agent_dir }}"
+  when: not azdo_agent_config_file.stat.exists
+
+# ──────────────────────────────────────────────
+# SECTION 3: Configure & Register Agent with Azure DevOps
+# ──────────────────────────────────────────────
+
+- name: Configure Azure DevOps agent (unattended)
+  ansible.builtin.command: >
+    ./config.sh --unattended
+    --url "{{ azdo_org_url }}"
+    --auth pat
+    --token "{{ azdo_pat_token }}"
+    --pool "{{ azdo_pool_name }}"
+    --agent "{{ azdo_agent_name }}"
+    --work "{{ azdo_work_dir }}"
+    --acceptTeeEula
+    {{ '--replace' if azdo_replace_existing else '' }}
+  args:
+    chdir: "{{ azdo_agent_dir }}"
+  become: true
+  become_user: "{{ azdo_agent_user }}"
+  no_log: true  # SECURITY: Prevent leaking PAT token into stdout / logs
+  when: not azdo_agent_config_file.stat.exists
+
+# ──────────────────────────────────────────────
+# SECTION 4: Install and Start Systemd Service
+# ──────────────────────────────────────────────
+
+- name: Install agent systemd service
+  ansible.builtin.command: ./svc.sh install "{{ azdo_agent_user }}"
+  args:
+    chdir: "{{ azdo_agent_dir }}"
+  when: azdo_service_files.matched == 0
+
+- name: Start agent systemd service
+  ansible.builtin.command: ./svc.sh start
+  args:
+    chdir: "{{ azdo_agent_dir }}"
+  register: svc_start_result
+  failed_when: false
+  changed_when: "'started' in svc_start_result.stdout.lower()"
+
+# ──────────────────────────────────────────────
+# SECTION 5: Verification & Summary
+# ──────────────────────────────────────────────
+
+- name: Check agent service status
+  ansible.builtin.command: ./svc.sh status
+  args:
+    chdir: "{{ azdo_agent_dir }}"
+  register: svc_status_result
+  changed_when: false
+
+- name: Print Azure DevOps agent summary
+  ansible.builtin.debug:
+    msg:
+      - "============================================"
+      - " InfraReaper Lab Server — Azure DevOps Agent "
+      - "============================================"
+      - "  Directory: {{ azdo_agent_dir }}"
+      - "  Pool:      {{ azdo_pool_name }}"
+      - "  Agent:     {{ azdo_agent_name }}"
+      - "  Service:   {{ svc_status_result.stdout_lines[0] | default('running') }}"
+      - "============================================"

@@ -1,0 +1,27 @@
+# ============================================================
+# Role: azdo-agent — Default Variables
+# ============================================================
+# Configuration for the Azure DevOps self-hosted build agent.
+# ============================================================
+
+---
+# --- Agent Package ---
+# Microsoft Azure Pipelines Agent for Linux x64
+azdo_agent_version: "3.248.0"
+azdo_agent_url: "https://vstsagentpackage.azureedge.net/agent/{{ azdo_agent_version }}/vsts-agent-linux-x64-{{ azdo_agent_version }}.tar.gz"
+
+# --- System & Directories ---
+azdo_agent_user: "{{ ansible_user | default('santhosh') }}"
+azdo_agent_dir: "/home/{{ azdo_agent_user }}/azdo-agent"
+azdo_work_dir: "_work"
+
+# --- Azure DevOps Registration ---
+# Provide these via -e or a private vars file:
+#   ansible-playbook playbooks/setup-lab-server.yml --tags agent \
+#     -e "azdo_org_url=https://dev.azure.com/your-org" \
+#     -e "azdo_pat_token=your-pat-token"
+azdo_org_url: ""
+azdo_pat_token: ""
+azdo_pool_name: "Default"
+azdo_agent_name: "infrareaper-lab-agent"
+azdo_replace_existing: true
