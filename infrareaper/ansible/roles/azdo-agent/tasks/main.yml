@@ -135,3 +135,4 @@
       - "  Agent:     {{ azdo_agent_name }}"
       - "  Service:   {{ svc_status_result.stdout_lines[0] | default('running') }}"
       - "============================================"
+

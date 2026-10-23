@@ -8,7 +8,7 @@
 # --- Agent Package ---
 # Microsoft Azure Pipelines Agent for Linux x64
 azdo_agent_version: "3.248.0"
-azdo_agent_url: "https://vstsagentpackage.azureedge.net/agent/{{ azdo_agent_version }}/vsts-agent-linux-x64-{{ azdo_agent_version }}.tar.gz"
+azdo_agent_url: "https://download.agent.dev.azure.com/agent/{{ azdo_agent_version }}/vsts-agent-linux-x64-{{ azdo_agent_version }}.tar.gz"
 
 # --- System & Directories ---
 azdo_agent_user: "{{ ansible_user | default('santhosh') }}"
