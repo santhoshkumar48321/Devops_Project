@@ -40,8 +40,8 @@
       tags: [common, packages]
     - role: docker
       tags: [docker]
-    # - role: security
-    #   tags: [security, hardening]
+    - role: security
+      tags: [security, hardening]
     # - role: azdo-agent
     #   tags: [agent, azdo]
 

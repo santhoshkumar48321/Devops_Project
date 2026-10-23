@@ -1,0 +1,148 @@
+# ============================================================
+# Role: security — Tasks
+# ============================================================
+# Configures server hardening: UFW firewall, Fail2ban brute-force
+# prevention, SSH configuration, and automated security patches.
+# ============================================================
+
+---
+# ──────────────────────────────────────────────
+# SECTION 1: Install Security Packages
+# ──────────────────────────────────────────────
+
+- name: Install security packages
+  ansible.builtin.apt:
+    name: "{{ security_packages }}"
+    state: present
+    update_cache: true
+
+# ──────────────────────────────────────────────
+# SECTION 2: UFW (Firewall) Configuration
+# ──────────────────────────────────────────────
+# CRITICAL SAFETY RULE:
+#   Always configure the SSH allow/limit rule BEFORE enabling
+#   the firewall or applying the default deny incoming policy,
+#   so you never get locked out of your server!
+
+- name: Configure UFW default incoming policy
+  community.general.ufw:
+    direction: incoming
+    default: "{{ security_ufw_default_incoming }}"
+
+- name: Configure UFW default outgoing policy
+  community.general.ufw:
+    direction: outgoing
+    default: "{{ security_ufw_default_outgoing }}"
+
+- name: Allow SSH with rate limiting
+  community.general.ufw:
+    rule: "{{ 'limit' if security_ssh_rate_limit else 'allow' }}"
+    port: "{{ security_ssh_port }}"
+    proto: tcp
+    comment: "SSH access with rate limiting"
+
+- name: Allow extra specified ports
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop: "{{ security_ufw_allowed_ports }}"
+  when: security_ufw_allowed_ports | length > 0
+
+- name: Enable UFW service
+  community.general.ufw:
+    state: enabled
+
+# ──────────────────────────────────────────────
+# SECTION 3: Fail2ban Configuration
+# ──────────────────────────────────────────────
+
+- name: Configure Fail2ban local jail settings
+  ansible.builtin.copy:
+    dest: /etc/fail2ban/jail.local
+    mode: "0644"
+    content: |
+      [DEFAULT]
+      bantime = {{ security_fail2ban_bantime }}
+      findtime = {{ security_fail2ban_findtime }}
+      maxretry = {{ security_fail2ban_maxretry }}
+
+      [sshd]
+      enabled = true
+      port = {{ security_ssh_port }}
+  notify: Restart fail2ban
+
+- name: Ensure fail2ban service is enabled and started
+  ansible.builtin.systemd:
+    name: fail2ban
+    enabled: true
+    state: started
+
+# ──────────────────────────────────────────────
+# SECTION 4: SSH Hardening
+# ──────────────────────────────────────────────
+
+- name: Ensure /etc/ssh/sshd_config.d directory exists
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config.d
+    state: directory
+    mode: "0755"
+
+- name: Apply SSH hardening configuration
+  ansible.builtin.copy:
+    dest: "{{ security_sshd_config_file }}"
+    mode: "0644"
+    content: |
+      # InfraReaper SSH Hardening Baseline
+      PermitEmptyPasswords {{ security_sshd_permit_empty_passwords }}
+      MaxAuthTries {{ security_sshd_max_auth_tries }}
+      X11Forwarding {{ security_sshd_x11_forwarding }}
+  notify: Restart SSH
+
+# ──────────────────────────────────────────────
+# SECTION 5: Unattended Security Upgrades
+# ──────────────────────────────────────────────
+
+- name: Configure automatic security updates
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    mode: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+  when: security_enable_auto_upgrades
+
+- name: Ensure unattended-upgrades service is enabled and started
+  ansible.builtin.systemd:
+    name: unattended-upgrades
+    enabled: true
+    state: started
+  when: security_enable_auto_upgrades
+
+- name: Flush handlers to apply any pending restarts
+  ansible.builtin.meta: flush_handlers
+
+# ──────────────────────────────────────────────
+# SECTION 6: Verification & Summary
+# ──────────────────────────────────────────────
+
+- name: Check UFW status
+  ansible.builtin.command: ufw status verbose
+  register: ufw_status_result
+  changed_when: false
+
+- name: Check Fail2ban status
+  ansible.builtin.command: fail2ban-client status sshd
+  register: fail2ban_status_result
+  changed_when: false
+
+- name: Print Security setup summary
+  ansible.builtin.debug:
+    msg:
+      - "============================================"
+      - " InfraReaper Lab Server — Security Role Done "
+      - "============================================"
+      - "  UFW Status: Active (SSH port {{ security_ssh_port }} protected)"
+      - "  Fail2ban:   Active (monitoring sshd)"
+      - "  Auto-Patch: Enabled (unattended-upgrades)"
+      - "============================================"
