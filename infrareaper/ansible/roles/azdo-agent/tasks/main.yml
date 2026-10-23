@@ -47,6 +47,8 @@
       - jq
       - libicu-dev
       - libssl-dev
+      - libkrb5-3
+      - zlib1g
     state: present
     update_cache: true
 
@@ -68,9 +70,14 @@
   when: not azdo_agent_config_file.stat.exists
 
 - name: Run agent dependency installer script
+  # Note: The bundled script looks for older libicu versions (up to libicu74).
+  # On newer Ubuntu releases (e.g. 26.04+), libicu is already satisfied by
+  # libicu-dev above, so we allow non-zero exit.
   ansible.builtin.command: ./bin/installdependencies.sh
   args:
     chdir: "{{ azdo_agent_dir }}"
+  failed_when: false
+  changed_when: false
   when: not azdo_agent_config_file.stat.exists
 
 # ──────────────────────────────────────────────
