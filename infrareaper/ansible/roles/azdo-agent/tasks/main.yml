@@ -15,11 +15,24 @@
     path: "{{ azdo_agent_dir }}/.agent"
   register: azdo_agent_config_file
 
-- name: Check if agent systemd service exists
-  ansible.builtin.find:
-    paths: /etc/systemd/system
-    patterns: "vsts.agent.*.service"
-  register: azdo_service_files
+- name: Check if systemd service is installed for this agent
+  ansible.builtin.stat:
+    path: "{{ azdo_agent_dir }}/.service"
+  register: azdo_service_file
+
+- name: Remove stale or broken leftover agent services pointing to /home/*/myagent
+  ansible.builtin.shell: |
+    for svc in /etc/systemd/system/vsts.agent.*.service; do
+      if [ -f "$svc" ] && grep -q "/myagent/" "$svc" 2>/dev/null; then
+        svcname=$(basename "$svc")
+        systemctl stop "$svcname" || true
+        systemctl disable "$svcname" || true
+        rm -f "$svc"
+        systemctl daemon-reload
+      fi
+    done
+  changed_when: false
+  failed_when: false
 
 - name: Validate required registration variables
   ansible.builtin.assert:
@@ -110,7 +123,7 @@
   ansible.builtin.command: ./svc.sh install "{{ azdo_agent_user }}"
   args:
     chdir: "{{ azdo_agent_dir }}"
-  when: azdo_service_files.matched == 0
+  when: not azdo_service_file.stat.exists
 
 - name: Start agent systemd service
   ansible.builtin.command: ./svc.sh start
