@@ -1,0 +1,55 @@
+# ============================================================
+# Role: common — Default Variables
+# ============================================================
+# These are the DEFAULT values for this role.
+# You can override them in the playbook or inventory.
+#
+# WHY defaults/main.yml?
+#   Putting versions and settings here (instead of hardcoding
+#   in tasks) means you can upgrade a tool by changing ONE line,
+#   not hunting through 50 lines of tasks.
+#
+# VARIABLE NAMING CONVENTION:
+#   common_<tool>_<setting> — prefixed with role name to avoid
+#   conflicts with other roles.
+# ============================================================
+
+---
+# --- System settings ---
+common_timezone: "Asia/Kolkata"
+
+# --- Tool versions ---
+# Pin versions so your builds are reproducible.
+# If you don't pin, 'latest' today might break tomorrow.
+common_terraform_version: "1.12.1"
+common_helm_version: "3.18.3"
+common_trivy_version: "0.62.1"
+common_shellcheck_version: "0.10.0"
+
+# --- Azure CLI ---
+# Installed via Microsoft's apt repository (always gets latest stable).
+# No version pin needed — Microsoft manages the repo.
+
+# --- kubectl ---
+# Installed via Kubernetes apt repository (always gets latest stable).
+# No version pin needed — version must be within ±1 of your AKS cluster.
+
+# --- Packages to install via apt ---
+common_apt_packages:
+  - git
+  - curl
+  - wget
+  - unzip
+  - jq
+  - make
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - apt-transport-https
+  - software-properties-common
+  - python3-pip
+  - python3-venv
+  - yamllint
+  - tree            # useful for viewing directory structures
+  - htop            # useful for monitoring server resources
+  - net-tools       # ifconfig, netstat — useful for debugging

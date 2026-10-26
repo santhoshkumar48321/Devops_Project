@@ -1,0 +1,43 @@
+# ============================================================
+# Role: security — Default Variables
+# ============================================================
+# These variables control the security baseline for the
+# InfraReaper lab server (Firewall, Fail2ban, SSH, Updates).
+# ============================================================
+
+---
+# --- Packages ---
+security_packages:
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - update-notifier-common
+
+# --- UFW (Uncomplicated Firewall) ---
+# Default policy: Drop all unexpected incoming traffic, allow all outgoing.
+security_ufw_default_incoming: deny
+security_ufw_default_outgoing: allow
+
+# SSH Port and rate limiting
+# Rate limiting blocks IPs that attempt 6+ connections in 30 seconds.
+security_ssh_port: 22
+security_ssh_rate_limit: true
+
+# Extra TCP ports to open (e.g. [80, 443] for future web services)
+security_ufw_allowed_ports: []
+
+# --- Fail2ban Settings ---
+# Temporarily bans IPs that fail authentication repeatedly.
+security_fail2ban_bantime: "1h"
+security_fail2ban_findtime: "10m"
+security_fail2ban_maxretry: 5
+
+# --- SSH Hardening ---
+# Placed in /etc/ssh/sshd_config.d/ so default config remains untouched.
+security_sshd_config_file: /etc/ssh/sshd_config.d/99-hardening.conf
+security_sshd_permit_empty_passwords: "no"
+security_sshd_max_auth_tries: 5
+security_sshd_x11_forwarding: "no"
+
+# --- Automatic Security Updates ---
+security_enable_auto_upgrades: true

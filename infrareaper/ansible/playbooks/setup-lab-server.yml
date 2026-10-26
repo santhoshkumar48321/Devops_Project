@@ -1,0 +1,56 @@
+# ============================================================
+# InfraReaper — Lab Server Setup Playbook
+# ============================================================
+# This is the MASTER PLAYBOOK — the single command you run to
+# configure your entire lab server.
+#
+# Usage:
+#   cd ~/infrareaper/ansible
+#   ansible-playbook playbooks/setup-lab-server.yml
+#
+# PLAYBOOK CONCEPTS:
+#
+# A playbook is a list of "plays". Each play says:
+#   "On THESE hosts, apply THESE roles in THIS order."
+#
+# Roles run in the order listed. This matters because:
+#   - 'common' installs base packages that other roles need
+#   - 'docker' depends on packages from 'common'
+#   - 'security' should run after services are installed
+#   - 'azdo-agent' runs last because it needs Docker + tools
+#
+# IDEMPOTENCY:
+#   You can run this playbook 100 times safely.
+#   Ansible checks "is this already done?" before each task.
+#   If a package is already installed → skip (green "ok").
+#   If a service is already running → skip (green "ok").
+#   Only tasks that need changes will run (yellow "changed").
+# ============================================================
+
+---
+- name: Configure InfraReaper Lab Server
+  # WHO: Apply this play to all hosts in the 'lab_servers' group.
+  # In our inventory, that's just 'localhost'.
+  hosts: lab_servers
+
+  # WHAT: Apply these roles, in order.
+  # We start with just 'common'. We'll uncomment the others as we build them.
+  roles:
+    - role: common
+      tags: [common, packages]
+    - role: docker
+      tags: [docker]
+    - role: security
+      tags: [security, hardening]
+    - role: azdo-agent
+      tags: [agent, azdo]
+
+# ============================================================
+# TAGS — Run only specific roles:
+#   ansible-playbook playbooks/setup-lab-server.yml --tags common
+#   ansible-playbook playbooks/setup-lab-server.yml --tags docker
+#   ansible-playbook playbooks/setup-lab-server.yml --tags security
+#
+# This is useful when you change just one role and don't want
+# to re-run everything.
+# ============================================================

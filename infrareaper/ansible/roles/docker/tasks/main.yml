@@ -1,0 +1,130 @@
+# ============================================================
+# Role: docker — Tasks
+# ============================================================
+# This file contains ALL tasks for installing and configuring
+# Docker Engine, containerd, and Docker plugins on Ubuntu 24.04.
+# ============================================================
+
+---
+# ──────────────────────────────────────────────
+# SECTION 1: Keyrings and GPG Signing Key
+# ──────────────────────────────────────────────
+
+- name: Ensure /etc/apt/keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Download Docker official GPG key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+
+# ──────────────────────────────────────────────
+# SECTION 2: Official Docker Repository
+# ──────────────────────────────────────────────
+
+- name: Add Docker official apt repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/ubuntu
+      {{ ansible_distribution_release }} stable
+    filename: docker
+    state: present
+
+# ──────────────────────────────────────────────
+# SECTION 3: Install Docker Engine & Plugins
+# ──────────────────────────────────────────────
+
+- name: Install Docker packages
+  ansible.builtin.apt:
+    name: "{{ docker_packages }}"
+    state: present
+    update_cache: true
+
+# ──────────────────────────────────────────────
+# SECTION 4: Daemon Configuration & Log Rotation
+# ──────────────────────────────────────────────
+
+- name: Ensure /etc/docker directory exists
+  ansible.builtin.file:
+    path: /etc/docker
+    state: directory
+    mode: "0755"
+
+- name: Configure Docker daemon (/etc/docker/daemon.json)
+  # WHY: Sets json-file log rotation so container logs don't consume all disk space.
+  ansible.builtin.copy:
+    content: "{{ docker_daemon_config | to_nice_json }}\n"
+    dest: /etc/docker/daemon.json
+    mode: "0644"
+  notify: Restart Docker
+
+# ──────────────────────────────────────────────
+# SECTION 5: User Group & Permissions
+# ──────────────────────────────────────────────
+
+- name: Ensure docker group exists
+  ansible.builtin.group:
+    name: docker
+    state: present
+
+- name: Add configured users to docker group
+  # WHY: Allows users to run Docker commands without typing 'sudo'.
+  # 'append: true' ensures existing groups (like sudo) are preserved!
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: docker
+    append: true
+  loop: "{{ docker_users }}"
+
+# ──────────────────────────────────────────────
+# SECTION 6: Service Management
+# ──────────────────────────────────────────────
+
+- name: Ensure containerd service is enabled and started
+  ansible.builtin.systemd:
+    name: containerd
+    enabled: "{{ docker_service_enabled }}"
+    state: "{{ docker_service_state }}"
+
+- name: Ensure Docker service is enabled and started
+  ansible.builtin.systemd:
+    name: docker
+    enabled: "{{ docker_service_enabled }}"
+    state: "{{ docker_service_state }}"
+
+- name: Flush handlers to apply any daemon changes immediately
+  ansible.builtin.meta: flush_handlers
+
+# ──────────────────────────────────────────────
+# SECTION 7: Verification
+# ──────────────────────────────────────────────
+
+- name: Verify Docker version
+  ansible.builtin.command: docker --version
+  register: docker_version_result
+  changed_when: false
+
+- name: Verify Docker Compose version
+  ansible.builtin.command: docker compose version
+  register: docker_compose_result
+  changed_when: false
+
+- name: Print Docker setup summary
+  ansible.builtin.debug:
+    msg:
+      - "============================================"
+      - "  InfraReaper Lab Server — Docker Role Done "
+      - "============================================"
+      - "  {{ docker_version_result.stdout }}"
+      - "  {{ docker_compose_result.stdout }}"
+      - "  Users added to docker group: {{ docker_users | join(', ') }}"
+      - "============================================"
+      - "  Note: Log out and back in if running Docker "
+      - "  without sudo for the new group to refresh.  "
+      - "============================================"
+
