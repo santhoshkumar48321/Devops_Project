@@ -62,3 +62,4 @@ resource "azurerm_key_vault" "kv" {
     var.tags
   )
 }
+

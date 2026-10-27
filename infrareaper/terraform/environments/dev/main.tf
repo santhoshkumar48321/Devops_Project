@@ -139,3 +139,4 @@ module "monitoring_infra" {
   location            = azurerm_resource_group.core_rg.location
   environment         = var.environment
 }
+

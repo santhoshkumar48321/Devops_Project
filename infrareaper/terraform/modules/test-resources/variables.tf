@@ -32,3 +32,4 @@ variable "enable_test_vms" {
   type        = bool
   default     = true
 }
+

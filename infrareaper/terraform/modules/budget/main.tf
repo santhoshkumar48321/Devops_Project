@@ -25,34 +25,34 @@ resource "azurerm_consumption_budget_resource_group" "budget" {
     start_date = formatdate("YYYY-MM-01'T'00:00:00Z", timestamp())
   }
 
-  # Alert 1: $10 threshold (~12.5% of $80)
+  # Alert 1: $10 threshold (~13% of $80)
   notification {
     operator       = "GreaterThan"
-    threshold      = 12.5
+    threshold      = 13
     threshold_type = "Actual"
     contact_emails = var.notification_emails
   }
 
-  # Alert 2: $25 threshold (~31.25% of $80)
+  # Alert 2: $25 threshold (~31% of $80)
   notification {
     operator       = "GreaterThan"
-    threshold      = 31.25
+    threshold      = 31
     threshold_type = "Actual"
     contact_emails = var.notification_emails
   }
 
-  # Alert 3: $50 threshold (62.5% of $80)
+  # Alert 3: $50 threshold (~63% of $80)
   notification {
     operator       = "GreaterThan"
-    threshold      = 62.5
+    threshold      = 63
     threshold_type = "Actual"
     contact_emails = var.notification_emails
   }
 
-  # Alert 4: $75 threshold (~93.75% of $80)
+  # Alert 4: $75 threshold (~94% of $80)
   notification {
     operator       = "GreaterThan"
-    threshold      = 93.75
+    threshold      = 94
     threshold_type = "Actual"
     contact_emails = var.notification_emails
   }
@@ -60,7 +60,7 @@ resource "azurerm_consumption_budget_resource_group" "budget" {
   # Alert 5: Forecasted to exceed 100% ($80)
   notification {
     operator       = "GreaterThan"
-    threshold      = 100.0
+    threshold      = 100
     threshold_type = "Forecasted"
     contact_emails = var.notification_emails
   }
@@ -71,3 +71,4 @@ resource "azurerm_consumption_budget_resource_group" "budget" {
     ]
   }
 }
+

@@ -109,3 +109,4 @@ resource "azurerm_subnet_network_security_group_association" "system_assoc" {
   subnet_id                 = azurerm_subnet.system_subnet.id
   network_security_group_id = azurerm_network_security_group.aks_nsg.id
 }
+

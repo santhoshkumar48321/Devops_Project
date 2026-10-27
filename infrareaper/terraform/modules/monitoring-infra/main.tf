@@ -31,3 +31,4 @@ resource "azurerm_log_analytics_workspace" "law" {
     var.tags
   )
 }
+

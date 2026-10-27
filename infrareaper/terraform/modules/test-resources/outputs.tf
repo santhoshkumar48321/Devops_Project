@@ -36,3 +36,4 @@ output "unattached_disk_name" {
   description = "Name of the unattached test managed disk."
   value       = azurerm_managed_disk.unattached_disk.name
 }
+

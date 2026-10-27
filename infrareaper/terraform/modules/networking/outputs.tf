@@ -31,3 +31,4 @@ output "nsg_name" {
   description = "The name of the Network Security Group."
   value       = azurerm_network_security_group.aks_nsg.name
 }
+

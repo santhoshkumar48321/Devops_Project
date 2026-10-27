@@ -53,8 +53,15 @@ variable "acr_id" {
   default     = null
 }
 
+variable "attach_acr" {
+  description = "Whether to attach ACR via AcrPull role assignment."
+  type        = bool
+  default     = true
+}
+
 variable "tags" {
   description = "Tags applied to the AKS cluster."
   type        = map(string)
   default     = {}
 }
+

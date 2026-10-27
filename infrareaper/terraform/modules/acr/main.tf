@@ -43,3 +43,4 @@ resource "azurerm_container_registry" "acr" {
     var.tags
   )
 }
+

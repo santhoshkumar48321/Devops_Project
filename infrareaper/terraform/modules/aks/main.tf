@@ -71,8 +71,9 @@ resource "azurerm_kubernetes_cluster" "aks" {
 # Allows the AKS kubelet identity to pull scanner container images
 # from ACR without needing docker login or imagePullSecrets!
 resource "azurerm_role_assignment" "aks_acr_pull" {
-  count                = var.acr_id != null ? 1 : 0
+  count                = var.attach_acr ? 1 : 0
   principal_id         = azurerm_kubernetes_cluster.aks.kubelet_identity[0].object_id
   role_definition_name = "AcrPull"
   scope                = var.acr_id
 }
+

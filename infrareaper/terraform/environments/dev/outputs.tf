@@ -51,3 +51,4 @@ output "cleanup_client_id" {
   description = "Client ID for Cleanup Service Principal."
   value       = module.identity.cleanup_client_id
 }
+

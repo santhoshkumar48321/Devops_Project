@@ -97,3 +97,4 @@ resource "azurerm_key_vault_secret" "cleanup_client_secret" {
   value        = azuread_service_principal_password.cleanup.value
   key_vault_id = var.key_vault_id
 }
+

@@ -30,3 +30,4 @@ variable "time_grain" {
   type        = string
   default     = "Monthly"
 }
+

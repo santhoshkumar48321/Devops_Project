@@ -194,3 +194,4 @@ resource "azurerm_managed_disk" "unattached_disk" {
   # No tags and unattached to any VM
   tags = {}
 }
+

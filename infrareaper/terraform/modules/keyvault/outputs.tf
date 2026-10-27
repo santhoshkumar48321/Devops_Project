@@ -16,3 +16,4 @@ output "key_vault_uri" {
   description = "The URI of the Key Vault for secret retrieval."
   value       = azurerm_key_vault.kv.vault_uri
 }
+

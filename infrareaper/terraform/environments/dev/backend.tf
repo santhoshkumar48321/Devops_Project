@@ -10,8 +10,9 @@
 terraform {
   backend "azurerm" {
     resource_group_name  = "infrareaper-state-rg"
-    storage_account_name = "REPLACE_WITH_STORAGE_ACCOUNT_NAME"
+    storage_account_name = "infrartfidjnc4"
     container_name       = "tfstate"
     key                  = "infrareaper.dev.tfstate"
   }
 }
+

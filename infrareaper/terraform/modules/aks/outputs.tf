@@ -46,3 +46,4 @@ output "kubelet_identity_object_id" {
   description = "The Object ID of the kubelet managed identity."
   value       = azurerm_kubernetes_cluster.aks.kubelet_identity[0].object_id
 }
+
