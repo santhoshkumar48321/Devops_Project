@@ -1,0 +1,38 @@
+# ============================================================
+# InfraReaper Lifecycle Management Rules
+# ============================================================
+# Governs expiration calculation, grace periods, and cleanup behavior.
+# Evaluated by check-expiry.sh and executed by cleanup.sh.
+# ============================================================
+
+version: "1.0"
+policy_name: "azure-resource-lifecycle-governance"
+
+lifecycle:
+  # Default TTL in days if resource lacks an explicit expiry-date tag
+  default_ttl_days: 30
+
+  # Grace period in hours after expiration before automated cleanup triggers
+  grace_period_hours: 48
+
+  # Notification thresholds for resources approaching expiry
+  warning_thresholds:
+    seven_day_warning_hours: 168     # 7 days
+    three_day_warning_hours: 72      # 72 hours
+    final_warning_hours: 24          # 24 hours
+
+  # Rate limiting: minimum interval in hours between notification emails for the same resource
+  notification_cooldown_hours: 24
+
+cleanup:
+  # Action to take on VMs before deletion (deallocate saves compute cost immediately)
+  vm_action_before_delete: "deallocate"
+
+  # Timeout waiting for VM graceful deallocation before proceeding (seconds)
+  deallocation_timeout_seconds: 300
+
+  # Automatically purge unattached managed disks older than days
+  unattached_disk_ttl_days: 7
+
+  # Automatically release unassociated public IP addresses older than days
+  unassociated_ip_ttl_days: 3

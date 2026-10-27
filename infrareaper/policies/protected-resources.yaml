@@ -1,0 +1,30 @@
+# ============================================================
+# InfraReaper Protected Resources Whitelist
+# ============================================================
+# CRITICAL SAFETY BARRIER: Resources or resource groups matching
+# any rule in this file are STRICTLY IMMUTABLE and IMMUNE from
+# deallocation or deletion by cleanup.sh, regardless of tags or expiry.
+# ============================================================
+
+version: "1.0"
+policy_name: "azure-protected-resources-whitelist"
+
+protected_resource_groups:
+  - "infrareaper-core-rg"          # Production/Core infrastructure (AKS, ACR, Key Vault)
+  - "infrareaper-state-rg"         # Terraform remote state storage
+  - "NetworkWatcherRG"             # Azure default network watcher RG
+
+protected_resource_types:
+  - "Microsoft.ContainerService/managedClusters"
+  - "Microsoft.ContainerRegistry/registries"
+  - "Microsoft.KeyVault/vaults"
+  - "Microsoft.OperationalInsights/workspaces"
+  - "Microsoft.Storage/storageAccounts" # Guarded at core, only test RG storage can be touched
+
+protected_tags:
+  - key: "protected"
+    value: "true"
+  - key: "do-not-delete"
+    value: "true"
+  - key: "Environment"
+    value: "prod"

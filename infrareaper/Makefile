@@ -30,7 +30,7 @@ NC := \033[0m  # No Color
 .PHONY: help lint lint-shell lint-terraform lint-ansible lint-yaml lint-docker \
         validate validate-terraform validate-k8s \
         build scan push deploy \
-        test clean
+        test test-scripts clean
 
 # ============================================================
 # HELP
@@ -140,11 +140,17 @@ deploy-prod: ## Deploy to AKS (prod overlay)
 # TESTING
 # ============================================================
 
-test: ## Run all tests (lint + validate + scan)
+test: ## Run all tests (lint + validate + scan + script tests)
 	@$(MAKE) lint
 	@$(MAKE) validate
+	@$(MAKE) test-scripts
 	@$(MAKE) scan-iac
 	@echo "$(GREEN)✓ All tests passed$(NC)"
+
+test-scripts: ## Run unit tests for scanner engine scripts
+	@echo "$(YELLOW)→ Running scanner script test suite...$(NC)"
+	bash tests/scripts/test_scanner_engine.sh
+	@echo "$(GREEN)✓ Script test suite passed$(NC)"
 
 # ============================================================
 # UTILITIES
