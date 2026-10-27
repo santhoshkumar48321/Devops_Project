@@ -38,6 +38,12 @@ variable "budget_amount" {
   default     = 80
 }
 
+variable "enable_budget" {
+  description = "Enable Azure Consumption Budget (disabled by default for Azure Student subscriptions)."
+  type        = bool
+  default     = false
+}
+
 variable "alert_emails" {
   description = "Email addresses for budget notifications."
   type        = list(string)

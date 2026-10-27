@@ -16,6 +16,7 @@ terraform {
 }
 
 resource "azurerm_consumption_budget_resource_group" "budget" {
+  count             = var.enabled ? 1 : 0
   name              = var.budget_name
   resource_group_id = var.resource_group_id
   amount            = var.budget_amount

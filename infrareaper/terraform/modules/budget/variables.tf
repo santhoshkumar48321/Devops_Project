@@ -2,6 +2,12 @@
 # Module: budget — Variables
 # ============================================================
 
+variable "enabled" {
+  description = "Enable or disable consumption budget resource (Azure Student accounts do not support API-managed budgets)."
+  type        = bool
+  default     = false
+}
+
 variable "resource_group_id" {
   description = "The Resource ID of the resource group to apply the budget to."
   type        = string

@@ -52,6 +52,8 @@ resource "azurerm_kubernetes_cluster" "aks" {
   network_profile {
     network_plugin    = "azure"
     load_balancer_sku = "standard"
+    service_cidr      = "10.240.0.0/16"
+    dns_service_ip    = "10.240.0.10"
   }
 
   tags = merge(

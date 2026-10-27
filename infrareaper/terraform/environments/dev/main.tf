@@ -125,6 +125,7 @@ module "identity" {
 # ──────────────────────────────────────────────
 module "budget" {
   source              = "../../modules/budget"
+  enabled             = var.enable_budget
   resource_group_id   = azurerm_resource_group.core_rg.id
   budget_amount       = var.budget_amount
   notification_emails = var.alert_emails
