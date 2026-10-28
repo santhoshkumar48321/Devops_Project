@@ -4,7 +4,8 @@
 # ============================================================
 # Scans targeted Azure Resource Groups for deployed resources,
 # identifies orphaned assets (unattached disks, unused IPs,
-# unattached NICs), and exports a normalized JSON inventory.
+# unattached NICs, unassociated NSGs), and exports a normalized
+# JSON inventory.
 # ============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -70,6 +71,11 @@ for rg in "${TARGET_RGS[@]}"; do
     RAW_NICS_FILE="${TEMP_RAW_DIR}/${rg}_nics.json"
     az network nic list --resource-group "${rg}" --query "[?virtualMachine==null]" -o json > "${RAW_NICS_FILE}" 2>/dev/null || echo "[]" > "${RAW_NICS_FILE}"
 
+    # 5. Query unassociated NSGs (not attached to any NIC or subnet)
+    log_debug "Querying unassociated NSGs in ${rg}..."
+    RAW_NSGS_FILE="${TEMP_RAW_DIR}/${rg}_nsgs.json"
+    az network nsg list --resource-group "${rg}" --query "[?length(networkInterfaces)==\`0\` && length(subnets)==\`0\`]" -o json > "${RAW_NSGS_FILE}" 2>/dev/null || echo "[]" > "${RAW_NSGS_FILE}"
+
     # Normalize and merge resources for this RG
     MERGED_RG_FILE="${TEMP_RAW_DIR}/${rg}_merged.json"
     SCAN_TIME="$(_timestamp)"
@@ -81,10 +87,12 @@ for rg in "${TARGET_RGS[@]}"; do
         --slurpfile unattached_disks "${RAW_DISKS_FILE}" \
         --slurpfile unassociated_ips "${RAW_IPS_FILE}" \
         --slurpfile unattached_nics "${RAW_NICS_FILE}" \
+        --slurpfile unassociated_nsgs "${RAW_NSGS_FILE}" \
         '
         ($unattached_disks[0] // [] | map(.id | ascii_downcase)) as $orphan_disk_ids |
         ($unassociated_ips[0] // [] | map(.id | ascii_downcase)) as $orphan_ip_ids |
         ($unattached_nics[0] // [] | map(.id | ascii_downcase)) as $orphan_nic_ids |
+        ($unassociated_nsgs[0] // [] | map(.id | ascii_downcase)) as $orphan_nsg_ids |
 
         ($standard[0] // []) | map({
             id: .id,
@@ -97,13 +105,15 @@ for rg in "${TARGET_RGS[@]}"; do
                 (.id | ascii_downcase) as $item_id |
                 ($orphan_disk_ids | index($item_id)) != null or
                 ($orphan_ip_ids | index($item_id)) != null or
-                ($orphan_nic_ids | index($item_id)) != null
+                ($orphan_nic_ids | index($item_id)) != null or
+                ($orphan_nsg_ids | index($item_id)) != null
             ),
             orphan_type: (
                 (.id | ascii_downcase) as $item_id |
                 if ($orphan_disk_ids | index($item_id)) != null then "unattached_disk"
                 elif ($orphan_ip_ids | index($item_id)) != null then "unassociated_public_ip"
                 elif ($orphan_nic_ids | index($item_id)) != null then "unattached_nic"
+                elif ($orphan_nsg_ids | index($item_id)) != null then "unassociated_nsg"
                 else null end
             ),
             created_time: (.createdTime // null),
