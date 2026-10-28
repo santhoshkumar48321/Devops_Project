@@ -117,3 +117,4 @@ To prevent a critical test asset or storage account from ever being cleaned up:
   az vm deallocate --resource-group infrareaper-test-resources --name test-vm-untagged
   ```
 - Core AKS nodes run on `sku_tier = "Free"` control plane tier with single-node auto-scaling.
+

@@ -82,3 +82,4 @@ Prometheus evaluates alerting rules continuously against ingested telemetry:
 - **`InfraReaperCriticalViolationsHigh`**: Triggers critical alert if `infrareaper_violations_total{severity="CRITICAL"} > 5`.
 - **`InfraReaperSLOBreach`**: Triggers critical alert if 1-hour scan success rate drops below 99.0%.
 - **`InfraReaperPushgatewayDown`**: Triggers warning if Pushgateway endpoint is unreachable for > 5 minutes.
+

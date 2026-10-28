@@ -15,8 +15,8 @@ LIFECYCLE_FILE="${OUTPUT_DIR}/lifecycle-report.json"
 AUDIT_FILE="${OUTPUT_DIR}/cleanup-audit.json"
 
 SENDGRID_API_KEY="${SENDGRID_API_KEY:-}"
-NOTIFICATION_TO_EMAIL="${NOTIFICATION_TO_EMAIL:-devops@infrareaper.local}"
-NOTIFICATION_FROM_EMAIL="${NOTIFICATION_FROM_EMAIL:-alerts@infrareaper.local}"
+NOTIFICATION_TO_EMAIL="${NOTIFICATION_TO_EMAIL:-myselfgudboy@gmail.com}"
+NOTIFICATION_FROM_EMAIL="${NOTIFICATION_FROM_EMAIL:-myselfgudboy@gmail.com}"
 
 log_info "=== Starting Notification Engine ==="
 
@@ -90,10 +90,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helve
 if [[ -z "${SENDGRID_API_KEY}" ]]; then
     log_info "SENDGRID_API_KEY is not configured. Email notification skipped (Dry-Run Notification)."
     log_info "Notification Subject would be: ${SUBJECT}"
+    log_info "Configured recipient: ${NOTIFICATION_TO_EMAIL}"
     exit 0
 fi
 
-log_info "Dispatching notification email to ${NOTIFICATION_TO_EMAIL}..."
+log_info "Dispatching notification email to ${NOTIFICATION_TO_EMAIL} (Sender: ${NOTIFICATION_FROM_EMAIL})..."
 
 PAYLOAD=$(jq -n \
     --arg to "${NOTIFICATION_TO_EMAIL}" \
@@ -107,17 +108,22 @@ PAYLOAD=$(jq -n \
         content: [{ type: "text/html", value: $html }]
     }')
 
-HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+RESPONSE_BODY=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
     -X POST "https://api.sendgrid.com/v3/mail/send" \
     -H "Authorization: Bearer ${SENDGRID_API_KEY}" \
     -H "Content-Type: application/json" \
-    -d "${PAYLOAD}" || echo "FAILED")
+    -d "${PAYLOAD}" || echo -e "\nHTTP_STATUS:FAILED")
+
+HTTP_STATUS=$(echo "${RESPONSE_BODY}" | grep "^HTTP_STATUS:" | cut -d':' -f2)
+ERROR_MSG=$(echo "${RESPONSE_BODY}" | grep -v "^HTTP_STATUS:")
 
 if [[ "${HTTP_STATUS}" == "202" || "${HTTP_STATUS}" == "200" ]]; then
-    log_success "Email notification successfully dispatched via SendGrid (HTTP ${HTTP_STATUS})."
+    log_success "Email notification successfully dispatched via SendGrid (HTTP ${HTTP_STATUS}) to ${NOTIFICATION_TO_EMAIL}."
 else
-    log_warn "Failed to dispatch email via SendGrid (HTTP Status: ${HTTP_STATUS}). Scan will continue uninterrupted."
+    log_warn "Failed to dispatch email via SendGrid (HTTP Status: ${HTTP_STATUS})."
+    if [[ -n "${ERROR_MSG}" ]]; then
+        log_warn "SendGrid API Response: ${ERROR_MSG}"
+    fi
 fi
 
 exit 0
-

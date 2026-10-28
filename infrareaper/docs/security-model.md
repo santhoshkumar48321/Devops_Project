@@ -65,3 +65,4 @@ A strict Kubernetes `NetworkPolicy` (`infrareaper-scanner-netpol`) enforces netw
 Every pull request and build undergoes automated Trivy vulnerability scanning:
 - **Zero Critical & High CVEs**: New vulnerabilities fail the pipeline immediately (`--exit-code 1`).
 - **Upstream CVE Tracking**: Documented base image vulnerabilities originating in Microsoft's upstream Python runtime are evaluated and tracked in `.trivyignore` with explicit architectural risk assessments.
+

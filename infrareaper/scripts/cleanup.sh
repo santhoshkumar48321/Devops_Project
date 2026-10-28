@@ -156,14 +156,15 @@ for (( i=0; i<CANDIDATE_COUNT; i++ )); do
             fi
 
             # Step B: Resource deletion
+            DEL_ERR=""
             if [[ "${RES_TYPE}" == "Microsoft.Storage/storageAccounts" ]]; then
-                az storage account delete --name "${RES_NAME}" --resource-group "${RES_RG}" --yes 2>/dev/null || EXEC_SUCCESS=false
+                DEL_ERR=$(az storage account delete --name "${RES_NAME}" --resource-group "${RES_RG}" --yes 2>&1) || EXEC_SUCCESS=false
             elif [[ "${RES_TYPE}" == "Microsoft.Network/publicIPAddresses" ]]; then
-                az network public-ip delete --name "${RES_NAME}" --resource-group "${RES_RG}" 2>/dev/null || EXEC_SUCCESS=false
+                DEL_ERR=$(az network public-ip delete --name "${RES_NAME}" --resource-group "${RES_RG}" 2>&1) || EXEC_SUCCESS=false
             elif [[ "${RES_TYPE}" == "Microsoft.Compute/disks" ]]; then
-                az disk delete --name "${RES_NAME}" --resource-group "${RES_RG}" --yes --no-wait 2>/dev/null || EXEC_SUCCESS=false
+                DEL_ERR=$(az disk delete --name "${RES_NAME}" --resource-group "${RES_RG}" --yes --no-wait 2>&1) || EXEC_SUCCESS=false
             else
-                az resource delete --ids "${RES_ID}" 2>/dev/null || EXEC_SUCCESS=false
+                DEL_ERR=$(az resource delete --ids "${RES_ID}" 2>&1) || EXEC_SUCCESS=false
             fi
 
             if [[ "${EXEC_SUCCESS}" == "true" ]]; then
@@ -172,8 +173,11 @@ for (( i=0; i<CANDIDATE_COUNT; i++ )); do
                 ACTION_REASON="Expired or orphaned resource successfully deleted"
             else
                 log_error "Failed to delete resource '${RES_NAME}'."
+                if [[ -n "${DEL_ERR}" ]]; then
+                    log_error "Azure Error Output: ${DEL_ERR}"
+                fi
                 ACTION_STATUS="DELETE_FAILED"
-                ACTION_REASON="Azure ARM API call returned an error"
+                ACTION_REASON="Azure ARM error: ${DEL_ERR:-Unknown error}"
             fi
         fi
     fi
@@ -239,4 +243,3 @@ log_info "Deleted (Real): ${DEL_CNT}"
 log_info "Simulated (Dry-Run): ${SIM_CNT}"
 log_info "Protected/Locked Skipped: ${SKIP_CNT}"
 log_info "Audit Log saved to: ${AUDIT_FILE}"
-

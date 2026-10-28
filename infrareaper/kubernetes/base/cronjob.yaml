@@ -60,6 +60,10 @@ spec:
                   value: "http://prometheus-pushgateway.infrareaper.svc.cluster.local:9091"
                 - name: OUTPUT_DIR
                   value: "/tmp/infrareaper"
+                - name: NOTIFICATION_TO_EMAIL
+                  value: "myselfgudboy@gmail.com"
+                - name: NOTIFICATION_FROM_EMAIL
+                  value: "myselfgudboy@gmail.com"
                 - name: AZURE_CLIENT_ID
                   valueFrom:
                     secretKeyRef:
@@ -118,4 +122,3 @@ spec:
               emptyDir: {}
             - name: azure-config-volume
               emptyDir: {}
-
