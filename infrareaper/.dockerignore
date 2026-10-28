@@ -1,0 +1,20 @@
+# ============================================================
+# Docker Ignore for InfraReaper Scanner
+# ============================================================
+# Prevents sensitive files, local state, and build artifacts
+# from being copied into the container build context.
+# ============================================================
+
+.git
+.gitignore
+.github
+*.md
+Makefile
+tmp/
+tests/
+ansible/
+kubernetes/
+pipelines/
+terraform/
+.trivyignore
+.pre-commit-config.yaml

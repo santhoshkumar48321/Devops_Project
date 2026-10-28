@@ -15,7 +15,7 @@
 # ============================================================
 
 # Variables (override with: make build IMAGE_TAG=v1.0.0)
-REGISTRY ?= yourregistry.azurecr.io
+REGISTRY ?= infrareaperacrpalwa.azurecr.io
 IMAGE_NAME ?= infrareaper-scanner
 IMAGE_TAG ?= dev
 FULL_IMAGE := $(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
