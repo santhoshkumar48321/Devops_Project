@@ -29,7 +29,7 @@ stages:
   - stage: Deploy_AKS
     displayName: "Deploy to AKS (${{ parameters.overlay }})"
     dependsOn: Build_and_Scan_Image
-    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    condition: and(succeeded(), or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), eq(variables['Build.Reason'], 'Manual'), contains(variables['Build.SourceBranch'], 'phase9')))
     jobs:
       - job: Deploy_K8s_Manifests
         displayName: "Deploy K8s Overlays"
@@ -76,3 +76,4 @@ stages:
               echo "=== Step 4: Verify Cluster Resources ==="
               kubectl get cronjobs,networkpolicies,configmaps,secrets -n "${{ parameters.kubeNamespace }}"
             displayName: "Verify AKS Resources"
+

@@ -83,3 +83,4 @@ stages:
       aksResourceGroup: $(AKS_RESOURCE_GROUP)
       kubeNamespace: $(KUBE_NAMESPACE)
       timeoutSeconds: 240
+

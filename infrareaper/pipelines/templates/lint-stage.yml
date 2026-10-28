@@ -62,3 +62,4 @@ stages:
               make test-scripts
             workingDirectory: ${{ parameters.workingDirectory }}
             displayName: "Execute Scanner Unit Tests"
+

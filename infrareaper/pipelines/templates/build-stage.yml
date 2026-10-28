@@ -64,6 +64,7 @@ stages:
               IMAGE_DEV="${{ parameters.acrLoginServer }}/${{ parameters.imageRepository }}:dev"
               docker push "$IMAGE_BUILD"
               docker push "$IMAGE_DEV"
-            condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+            condition: and(succeeded(), or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), eq(variables['Build.Reason'], 'Manual'), contains(variables['Build.SourceBranch'], 'phase9')))
             workingDirectory: ${{ parameters.workingDirectory }}
             displayName: "Push Images to ACR"
+

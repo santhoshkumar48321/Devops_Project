@@ -42,3 +42,4 @@ stages:
               trivy fs --scanners secret --exit-code 1 .
             workingDirectory: ${{ parameters.workingDirectory }}
             displayName: "Trivy Secret Detection"
+
