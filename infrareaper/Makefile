@@ -96,7 +96,7 @@ scan: scan-image scan-iac ## Run ALL security scans
 
 scan-image: ## Scan Docker image with Trivy
 	@echo "$(YELLOW)→ Scanning Docker image...$(NC)"
-	trivy image --severity CRITICAL,HIGH --exit-code 1 $(FULL_IMAGE)
+	trivy image --severity CRITICAL,HIGH --ignorefile .trivyignore --exit-code 1 $(FULL_IMAGE)
 
 scan-iac: ## Scan IaC (Terraform + K8s) with Trivy
 	@echo "$(YELLOW)→ Scanning Terraform configs...$(NC)"

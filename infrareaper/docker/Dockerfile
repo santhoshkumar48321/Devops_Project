@@ -20,15 +20,18 @@ LABEL org.opencontainers.image.title="InfraReaper Scanner" \
 # Use bash with pipefail for shell execution safety
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Universal package installation (supports Azure Linux tdnf, Debian apt, and Alpine apk)
+# Universal package installation and OS updates (supports Azure Linux tdnf, Debian apt, and Alpine apk)
 RUN if command -v tdnf >/dev/null 2>&1; then \
+        tdnf upgrade -y && \
         tdnf install -y shadow-utils curl jq ca-certificates && \
         tdnf clean all; \
     elif command -v apt-get >/dev/null 2>&1; then \
         apt-get update && \
+        apt-get upgrade -y && \
         apt-get install -y --no-install-recommends curl jq ca-certificates && \
         rm -rf /var/lib/apt/lists/*; \
     elif command -v apk >/dev/null 2>&1; then \
+        apk update && apk upgrade && \
         apk add --no-cache bash curl jq ca-certificates coreutils; \
     fi
 
