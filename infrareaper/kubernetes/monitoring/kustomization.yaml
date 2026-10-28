@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: infrareaper
+
+resources:
+  # 1. Metrics Ingestion & Pushgateway
+  - prometheus/pushgateway-deployment.yaml
+
+  # 2. Prometheus Core Server & Alert Rules
+  - prometheus/prometheus-configmap.yaml
+  - prometheus/prometheus-deployment.yaml
+
+  # 3. Alertmanager Notifications
+  - alertmanager/alertmanager-configmap.yaml
+  - alertmanager/alertmanager-deployment.yaml
+
+  # 4. Centralized Logging (Loki + Promtail)
+  - loki/loki-configmap.yaml
+  - loki/loki-deployment.yaml
+  - loki/promtail-daemonset.yaml
+
+  # 5. Grafana Visualization & Dashboards
+  - grafana/

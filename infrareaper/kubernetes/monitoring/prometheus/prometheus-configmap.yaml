@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: infrareaper
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: infrareaper
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      scrape_timeout: 10s
+
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets:
+                - alertmanager:9093
+
+    rule_files:
+      - /etc/prometheus/alert-rules.yml
+
+    scrape_configs:
+      - job_name: "prometheus"
+        static_configs:
+          - targets: ["localhost:9090"]
+
+      - job_name: "pushgateway"
+        honor_labels: true
+        scrape_interval: 15s
+        static_configs:
+          - targets: ["prometheus-pushgateway:9091"]
+
+  alert-rules.yml: |
+    groups:
+      - name: infrareaper-governance-alerts
+        rules:
+          - alert: InfraReaperLowCompliance
+            expr: infrareaper_compliance_score < 50
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Low InfraReaper Compliance Score ({{ $value }}%)"
+              description: "Environment compliance score has dropped below the 50% governance threshold."
+
+          - alert: InfraReaperCriticalViolationsHigh
+            expr: infrareaper_violations_total{severity="CRITICAL"} > 5
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "High volume of Critical Violations detected"
+              description: "There are currently {{ $value }} critical policy violations requiring immediate remediation."
+
+          - alert: InfraReaperSLOBreach
+            expr: (sum(rate(infrareaper_scan_success_total[1h])) / sum(rate(infrareaper_scan_total[1h]))) < 0.99
+            for: 15m
+            labels:
+              severity: critical
+            annotations:
+              summary: "InfraReaper Scanner SLO Breach (<99%)"
+              description: "Scanner availability has degraded below the 99% SLO commitment."
+
+          - alert: InfraReaperPushgatewayDown
+            expr: up{job="pushgateway"} == 0
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Prometheus Pushgateway is Down"
+              description: "Pushgateway service is unreachable; scanner metrics cannot be ingested."

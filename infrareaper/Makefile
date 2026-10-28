@@ -93,6 +93,7 @@ validate-k8s: ## Validate Kubernetes manifests
 	kubectl kustomize kubernetes/base/ > /dev/null
 	kubectl kustomize kubernetes/overlays/dev/ > /dev/null
 	kubectl kustomize kubernetes/overlays/prod/ > /dev/null
+	kubectl kustomize kubernetes/monitoring/ > /dev/null
 	@echo "$(GREEN)✓ Kustomize build succeeded for base, dev, and prod$(NC)"
 
 # ============================================================
@@ -142,6 +143,20 @@ deploy: ## Deploy to AKS (current kubectl context)
 deploy-prod: ## Deploy to AKS (prod overlay)
 	@echo "$(RED)⚠ Deploying PROD overlay...$(NC)"
 	kubectl apply -k kubernetes/overlays/prod/
+	@echo "$(GREEN)✓ Deployed to $(KUBE_NAMESPACE) (prod)$(NC)"
+
+deploy-monitoring: ## Deploy Observability stack (Prometheus, Grafana, Loki)
+	@echo "$(YELLOW)→ Deploying Observability stack to $(KUBE_NAMESPACE)...$(NC)"
+	kubectl apply -k kubernetes/monitoring/
+	@echo "$(GREEN)✓ Observability stack deployed to $(KUBE_NAMESPACE)$(NC)"
+
+port-forward-grafana: ## Forward Grafana port 3000 to localhost
+	@echo "$(GREEN)Grafana running at http://localhost:3000 (admin / infrareaper)$(NC)"
+	kubectl port-forward svc/grafana 3000:3000 -n $(KUBE_NAMESPACE)
+
+port-forward-prometheus: ## Forward Prometheus port 9090 to localhost
+	@echo "$(GREEN)Prometheus running at http://localhost:9090$(NC)"
+	kubectl port-forward svc/prometheus 9090:9090 -n $(KUBE_NAMESPACE)
 	@echo "$(GREEN)✓ Deployed to $(KUBE_NAMESPACE) (prod)$(NC)"
 
 # ============================================================

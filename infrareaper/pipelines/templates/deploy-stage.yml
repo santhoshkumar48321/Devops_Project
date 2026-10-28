@@ -1,3 +1,4 @@
+
 # ============================================================
 # Stage Template: Deploy to AKS
 # ============================================================
@@ -77,6 +78,12 @@ stages:
             displayName: "Synchronize Secrets from Key Vault"
 
           - script: |
-              echo "=== Step 4: Verify Cluster Resources ==="
-              kubectl get cronjobs,networkpolicies,configmaps,secrets -n "${{ parameters.kubeNamespace }}"
+              echo "=== Step 4: Deploy Observability Stack (Prometheus, Grafana, Loki) ==="
+              kubectl apply -k "kubernetes/monitoring/"
+            workingDirectory: ${{ parameters.workingDirectory }}
+            displayName: "Deploy Observability Stack"
+
+          - script: |
+              echo "=== Step 5: Verify Cluster Resources ==="
+              kubectl get all,cronjobs,networkpolicies,configmaps,secrets -n "${{ parameters.kubeNamespace }}"
             displayName: "Verify AKS Resources"
