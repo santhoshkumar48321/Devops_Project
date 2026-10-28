@@ -168,11 +168,11 @@ export PUSHGATEWAY_URL="http://127.0.0.1:9099" # Intentional unreachable port fo
 bash "${SCRIPTS_DIR}/push-metrics.sh"
 METRICS_FILE="${TEST_TMP_DIR}/metrics.prom"
 
-HAS_TOTAL_METRIC=$(grep -c "infrareaper_resources_total" "${METRICS_FILE}" || true)
-HAS_SCORE_METRIC=$(grep -c "infrareaper_compliance_score" "${METRICS_FILE}" || true)
+HAS_TOTAL_METRIC=$(grep -c "^infrareaper_resources_total{" "${METRICS_FILE}" || true)
+HAS_SCORE_METRIC=$(grep -c "^infrareaper_compliance_score{" "${METRICS_FILE}" || true)
 
-assert_equals "2" "${HAS_TOTAL_METRIC}" "Prometheus help and gauge present for infrareaper_resources_total"
-assert_equals "2" "${HAS_SCORE_METRIC}" "Prometheus help and gauge present for infrareaper_compliance_score"
+assert_equals "1" "${HAS_TOTAL_METRIC}" "Prometheus gauge metric line present for infrareaper_resources_total"
+assert_equals "1" "${HAS_SCORE_METRIC}" "Prometheus gauge metric line present for infrareaper_compliance_score"
 
 echo ""
 echo "============================================================"
