@@ -127,3 +127,4 @@ log_info "Compliant Resources: ${COMPLIANT_RES} / ${TOTAL_RES}"
 log_info "Compliance Score: ${SCORE}%"
 log_info "Violations: ${CRIT_VIOL} Critical, ${WARN_VIOL} Warning"
 log_info "Report saved to: ${COMPLIANCE_FILE}"
+

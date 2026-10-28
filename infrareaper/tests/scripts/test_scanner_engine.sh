@@ -112,7 +112,7 @@ cat <<EOF > "${MOCK_INVENTORY}"
 EOF
 
 export OUTPUT_DIR="${TEST_TMP_DIR}"
-"${SCRIPTS_DIR}/evaluate-policies.sh"
+bash "${SCRIPTS_DIR}/evaluate-policies.sh"
 
 COMPLIANCE_JSON="${TEST_TMP_DIR}/compliance-report.json"
 
@@ -132,7 +132,7 @@ assert_equals "1" "${INFO_CNT}" "Invalid environment value flagged as INFO viola
 echo ""
 echo "Test Suite 2: Lifecycle & Expiry Calculator"
 
-"${SCRIPTS_DIR}/check-expiry.sh"
+bash "${SCRIPTS_DIR}/check-expiry.sh"
 LIFECYCLE_JSON="${TEST_TMP_DIR}/lifecycle-report.json"
 
 EXPIRED_CNT=$(jq '.summary.expired_actionable' "${LIFECYCLE_JSON}")
@@ -149,7 +149,7 @@ echo ""
 echo "Test Suite 3: Protected Resources Whitelist Safety Guard"
 
 export DRY_RUN="true"
-"${SCRIPTS_DIR}/cleanup.sh"
+bash "${SCRIPTS_DIR}/cleanup.sh"
 AUDIT_JSON="${TEST_TMP_DIR}/cleanup-audit.json"
 
 SIMULATED_DELETES=$(jq '.audit_metadata.dry_run_simulated_count' "${AUDIT_JSON}")
@@ -165,7 +165,7 @@ echo ""
 echo "Test Suite 4: Prometheus Metrics Exposition Generation"
 
 export PUSHGATEWAY_URL="http://127.0.0.1:9099" # Intentional unreachable port for non-fatal check
-"${SCRIPTS_DIR}/push-metrics.sh"
+bash "${SCRIPTS_DIR}/push-metrics.sh"
 METRICS_FILE="${TEST_TMP_DIR}/metrics.prom"
 
 HAS_TOTAL_METRIC=$(grep -c "infrareaper_resources_total" "${METRICS_FILE}" || true)
@@ -185,3 +185,4 @@ else
     echo "============================================================"
     exit 1
 fi
+

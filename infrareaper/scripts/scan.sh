@@ -133,3 +133,4 @@ log_success "=== Scan Complete ==="
 log_info "Total Resources Found: ${TOTAL_COUNT}"
 log_info "Orphaned Assets Found: ${ORPHAN_COUNT}"
 log_info "Inventory saved to: ${INVENTORY_FILE}"
+

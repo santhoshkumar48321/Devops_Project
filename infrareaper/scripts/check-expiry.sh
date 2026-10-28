@@ -149,3 +149,4 @@ log_info "Expiring Soon (Warnings): ${WARN_CNT}"
 log_info "Expired (In 48h Grace Period): ${GRACE_CNT}"
 log_info "Actionable for Cleanup: ${CLEANUP_CNT}"
 log_info "Report saved to: ${LIFECYCLE_FILE}"
+

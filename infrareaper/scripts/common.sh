@@ -110,3 +110,4 @@ azure_login() {
     fi
     return 0
 }
+

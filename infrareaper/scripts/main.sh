@@ -32,7 +32,7 @@ finish_execution() {
     # Ensure metrics are always pushed for SLO tracking (NFR-REL-01, FR-MET-03)
     export SCAN_DURATION="${duration}"
     export SCAN_SUCCESS="${SCAN_SUCCESS}"
-    "${SCRIPT_DIR}/push-metrics.sh" || true
+    bash "${SCRIPT_DIR}/push-metrics.sh" || true
 
     log_info "=== InfraReaper Run Terminated ==="
     exit ${exit_code}
@@ -55,22 +55,23 @@ azure_login
 
 # Step 2: Inventory Scanning
 log_info "Step 2/6: Executing Resource Inventory Scan..."
-"${SCRIPT_DIR}/scan.sh"
+bash "${SCRIPT_DIR}/scan.sh"
 
 # Step 3: Policy Compliance Evaluation
 log_info "Step 3/6: Evaluating Governance Policies..."
-"${SCRIPT_DIR}/evaluate-policies.sh"
+bash "${SCRIPT_DIR}/evaluate-policies.sh"
 
 # Step 4: Lifecycle & Expiry Calculation
 log_info "Step 4/6: Calculating Expiry & Lifecycle States..."
-"${SCRIPT_DIR}/check-expiry.sh"
+bash "${SCRIPT_DIR}/check-expiry.sh"
 
 # Step 5: Safe Automated Cleanup
 log_info "Step 5/6: Executing Automated Cleanup Routine..."
-"${SCRIPT_DIR}/cleanup.sh"
+bash "${SCRIPT_DIR}/cleanup.sh"
 
 # Step 6: Notification Dispatch
 log_info "Step 6/6: Dispatching Notifications..."
-"${SCRIPT_DIR}/notify.sh"
+bash "${SCRIPT_DIR}/notify.sh"
 
 log_success "All scanning and governance steps finished."
+
