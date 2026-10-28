@@ -4,9 +4,10 @@
 # Hardened container runtime for executing InfraReaper cloud
 # governance and lifecycle sweeps on AKS. Compliant with CIS
 # Docker benchmarks and non-root execution.
+# Base OS: Microsoft Azure Linux 3.0 (CBL-Mariner).
 # ============================================================
 
-FROM mcr.microsoft.com/azure-cli:2.64.0-alpine
+FROM mcr.microsoft.com/azure-cli:2.64.0-azurelinux3.0
 
 # OCI Standard Image Annotations
 LABEL org.opencontainers.image.title="InfraReaper Scanner" \
@@ -15,29 +16,30 @@ LABEL org.opencontainers.image.title="InfraReaper Scanner" \
       org.opencontainers.image.vendor="InfraReaper Team" \
       org.opencontainers.image.licenses="Apache-2.0"
 
-# Use bash with pipefail for shell safety
+# Use bash with pipefail for shell execution safety
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Install runtime utilities: jq for JSON, curl for API calls, coreutils for GNU date
-RUN apk update && \
-    apk add --no-cache \
-        bash \
+# Install runtime utilities:
+# - shadow-utils: provides useradd/groupadd for user isolation
+# - curl & jq: for API interactions (SendGrid, Pushgateway, JSON parsing)
+# - ca-certificates: TLS verification for Azure ARM and SendGrid
+RUN tdnf install -y \
+        shadow-utils \
         curl \
         jq \
-        coreutils \
         ca-certificates && \
-    rm -rf /var/cache/apk/*
+    tdnf clean all
 
 # Create unprivileged system user and group (UID 10001) for least-privilege security
-RUN addgroup -g 10001 -S infrareaper && \
-    adduser -u 10001 -S -G infrareaper -h /home/infrareaper -s /bin/bash infrareaper && \
+RUN groupadd -g 10001 infrareaper && \
+    useradd -u 10001 -g infrareaper -m -s /bin/bash infrareaper && \
     mkdir -p /home/infrareaper/.azure /tmp/infrareaper /app && \
     chown -R 10001:10001 /home/infrareaper /tmp/infrareaper /app
 
 # Set working directory
 WORKDIR /app
 
-# Copy application assets into container
+# Copy application policies and scripts into container
 COPY --chown=10001:10001 policies/ /app/policies/
 COPY --chown=10001:10001 scripts/ /app/scripts/
 
