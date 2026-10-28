@@ -3,8 +3,8 @@
 # InfraReaper Resource Scanner (scan.sh)
 # ============================================================
 # Scans targeted Azure Resource Groups for deployed resources,
-# identifies orphaned assets (unattached disks, unused IPs),
-# and exports a normalized JSON inventory.
+# identifies orphaned assets (unattached disks, unused IPs,
+# unattached NICs), and exports a normalized JSON inventory.
 # ============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -65,6 +65,11 @@ for rg in "${TARGET_RGS[@]}"; do
     RAW_IPS_FILE="${TEMP_RAW_DIR}/${rg}_ips.json"
     az network public-ip list --resource-group "${rg}" --query "[?ipConfiguration==null]" -o json > "${RAW_IPS_FILE}" 2>/dev/null || echo "[]" > "${RAW_IPS_FILE}"
 
+    # 4. Query unattached network interfaces (NICs without VM)
+    log_debug "Querying unattached NICs in ${rg}..."
+    RAW_NICS_FILE="${TEMP_RAW_DIR}/${rg}_nics.json"
+    az network nic list --resource-group "${rg}" --query "[?virtualMachine==null]" -o json > "${RAW_NICS_FILE}" 2>/dev/null || echo "[]" > "${RAW_NICS_FILE}"
+
     # Normalize and merge resources for this RG
     MERGED_RG_FILE="${TEMP_RAW_DIR}/${rg}_merged.json"
     SCAN_TIME="$(_timestamp)"
@@ -75,9 +80,11 @@ for rg in "${TARGET_RGS[@]}"; do
         --slurpfile standard "${RAW_RES_FILE}" \
         --slurpfile unattached_disks "${RAW_DISKS_FILE}" \
         --slurpfile unassociated_ips "${RAW_IPS_FILE}" \
+        --slurpfile unattached_nics "${RAW_NICS_FILE}" \
         '
-        ($unattached_disks[0] // [] | map(.id)) as $orphan_disk_ids |
-        ($unassociated_ips[0] // [] | map(.id)) as $orphan_ip_ids |
+        ($unattached_disks[0] // [] | map(.id | ascii_downcase)) as $orphan_disk_ids |
+        ($unassociated_ips[0] // [] | map(.id | ascii_downcase)) as $orphan_ip_ids |
+        ($unattached_nics[0] // [] | map(.id | ascii_downcase)) as $orphan_nic_ids |
 
         ($standard[0] // []) | map({
             id: .id,
@@ -86,11 +93,17 @@ for rg in "${TARGET_RGS[@]}"; do
             resourceGroup: ($rg),
             location: .location,
             tags: (.tags // {}),
-            is_orphan: ((.id as $item_id | $orphan_disk_ids | index($item_id)) != null or
-                        (.id as $item_id | $orphan_ip_ids | index($item_id)) != null),
+            is_orphan: (
+                (.id | ascii_downcase) as $item_id |
+                ($orphan_disk_ids | index($item_id)) != null or
+                ($orphan_ip_ids | index($item_id)) != null or
+                ($orphan_nic_ids | index($item_id)) != null
+            ),
             orphan_type: (
-                if (.id as $item_id | $orphan_disk_ids | index($item_id)) != null then "unattached_disk"
-                elif (.id as $item_id | $orphan_ip_ids | index($item_id)) != null then "unassociated_public_ip"
+                (.id | ascii_downcase) as $item_id |
+                if ($orphan_disk_ids | index($item_id)) != null then "unattached_disk"
+                elif ($orphan_ip_ids | index($item_id)) != null then "unassociated_public_ip"
+                elif ($orphan_nic_ids | index($item_id)) != null then "unattached_nic"
                 else null end
             ),
             created_time: (.createdTime // null),
@@ -114,16 +127,16 @@ jq -n \
     --arg timestamp "${TIMESTAMP}" \
     --argjson total "${TOTAL_COUNT}" \
     --argjson orphans "${ORPHAN_COUNT}" \
-    --arg rgs "${TARGET_RESOURCE_GROUPS}" \
-    --slurpfile items "${ALL_RESOURCES_TEMP}" \
+    --slurpfile rgs <(printf '%s\n' "${TARGET_RGS[@]}" | jq -R . | jq -s .) \
+    --slurpfile resources "${ALL_RESOURCES_TEMP}" \
     '{
         metadata: {
             scanned_at: $timestamp,
-            target_resource_groups: ($rgs | split(",")),
+            target_resource_groups: $rgs[0],
             total_resources: $total,
             orphan_count: $orphans
         },
-        resources: $items[0]
+        resources: $resources[0]
     }' > "${INVENTORY_FILE}"
 
 # Cleanup temp files
@@ -133,4 +146,3 @@ log_success "=== Scan Complete ==="
 log_info "Total Resources Found: ${TOTAL_COUNT}"
 log_info "Orphaned Assets Found: ${ORPHAN_COUNT}"
 log_info "Inventory saved to: ${INVENTORY_FILE}"
-
