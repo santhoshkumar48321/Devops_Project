@@ -4,10 +4,11 @@
 # Hardened container runtime for executing InfraReaper cloud
 # governance and lifecycle sweeps on AKS. Compliant with CIS
 # Docker benchmarks and non-root execution.
-# Base OS: Microsoft Azure Linux 3.0 (CBL-Mariner).
+# Base: Microsoft Azure CLI official runtime.
 # ============================================================
 
-FROM mcr.microsoft.com/azure-cli:2.64.0-azurelinux3.0
+ARG AZ_CLI_VERSION=latest
+FROM mcr.microsoft.com/azure-cli:${AZ_CLI_VERSION}
 
 # OCI Standard Image Annotations
 LABEL org.opencontainers.image.title="InfraReaper Scanner" \
@@ -19,20 +20,26 @@ LABEL org.opencontainers.image.title="InfraReaper Scanner" \
 # Use bash with pipefail for shell execution safety
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Install runtime utilities:
-# - shadow-utils: provides useradd/groupadd for user isolation
-# - curl & jq: for API interactions (SendGrid, Pushgateway, JSON parsing)
-# - ca-certificates: TLS verification for Azure ARM and SendGrid
-RUN tdnf install -y \
-        shadow-utils \
-        curl \
-        jq \
-        ca-certificates && \
-    tdnf clean all
+# Universal package installation (supports Azure Linux tdnf, Debian apt, and Alpine apk)
+RUN if command -v tdnf >/dev/null 2>&1; then \
+        tdnf install -y shadow-utils curl jq ca-certificates && \
+        tdnf clean all; \
+    elif command -v apt-get >/dev/null 2>&1; then \
+        apt-get update && \
+        apt-get install -y --no-install-recommends curl jq ca-certificates && \
+        rm -rf /var/lib/apt/lists/*; \
+    elif command -v apk >/dev/null 2>&1; then \
+        apk add --no-cache bash curl jq ca-certificates coreutils; \
+    fi
 
 # Create unprivileged system user and group (UID 10001) for least-privilege security
-RUN groupadd -g 10001 infrareaper && \
-    useradd -u 10001 -g infrareaper -m -s /bin/bash infrareaper && \
+RUN if command -v groupadd >/dev/null 2>&1; then \
+        groupadd -g 10001 infrareaper && \
+        useradd -u 10001 -g infrareaper -m -s /bin/bash infrareaper; \
+    else \
+        addgroup -g 10001 -S infrareaper && \
+        adduser -u 10001 -S -G infrareaper -h /home/infrareaper -s /bin/bash infrareaper; \
+    fi && \
     mkdir -p /home/infrareaper/.azure /tmp/infrareaper /app && \
     chown -R 10001:10001 /home/infrareaper /tmp/infrareaper /app
 
