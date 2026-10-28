@@ -163,6 +163,8 @@ for (( i=0; i<CANDIDATE_COUNT; i++ )); do
                 DEL_ERR=$(az network public-ip delete --name "${RES_NAME}" --resource-group "${RES_RG}" 2>&1) || EXEC_SUCCESS=false
             elif [[ "${RES_TYPE}" == "Microsoft.Compute/disks" ]]; then
                 DEL_ERR=$(az disk delete --name "${RES_NAME}" --resource-group "${RES_RG}" --yes --no-wait 2>&1) || EXEC_SUCCESS=false
+            elif [[ "${RES_TYPE}" == "Microsoft.Compute/virtualMachines" ]]; then
+                DEL_ERR=$(az vm delete --name "${RES_NAME}" --resource-group "${RES_RG}" --yes 2>&1) || EXEC_SUCCESS=false
             else
                 DEL_ERR=$(az resource delete --ids "${RES_ID}" 2>&1) || EXEC_SUCCESS=false
             fi

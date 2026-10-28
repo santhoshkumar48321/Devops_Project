@@ -63,8 +63,8 @@ jq \
             end
         ) as $env_violations |
 
-        # Tag 3: expiry-date
-        (get_tag($tags; "expiry-date") // get_tag($tags; "expiry_date") // get_tag($tags; "expiryDate")) as $exp_val |
+        # Tag 3: expiry-date (supports expiry-date, expiryDate, expire-date, expireDate, expiration-date, etc.)
+        (get_tag($tags; "expiry-date") // get_tag($tags; "expiry_date") // get_tag($tags; "expirydate") // get_tag($tags; "expire-date") // get_tag($tags; "expire_date") // get_tag($tags; "expiredate") // get_tag($tags; "expiration-date") // get_tag($tags; "expirationdate") // get_tag($tags; "expires")) as $exp_val |
         (
             if $exp_val == null or $exp_val == "" then
                 [{tag: "expiry-date", severity: "WARNING", message: "Missing required tag: expiry-date"}]
@@ -127,4 +127,3 @@ log_info "Compliant Resources: ${COMPLIANT_RES} / ${TOTAL_RES}"
 log_info "Compliance Score: ${SCORE}%"
 log_info "Violations: ${CRIT_VIOL} Critical, ${WARN_VIOL} Warning"
 log_info "Report saved to: ${COMPLIANCE_FILE}"
-
