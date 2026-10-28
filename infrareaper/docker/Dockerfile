@@ -21,6 +21,7 @@ LABEL org.opencontainers.image.title="InfraReaper Scanner" \
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Universal package installation and OS updates (supports Azure Linux tdnf, Debian apt, and Alpine apk)
+# hadolint ignore=DL3008,DL3018
 RUN if command -v tdnf >/dev/null 2>&1; then \
         tdnf upgrade -y && \
         tdnf install -y shadow-utils curl jq ca-certificates && \

@@ -70,9 +70,9 @@ lint-yaml: ## Lint YAML files
 lint-docker: ## Lint Dockerfile with hadolint
 	@echo "$(YELLOW)→ Running hadolint...$(NC)"
 	@if command -v hadolint >/dev/null 2>&1; then \
-		hadolint --ignore DL3008 docker/Dockerfile; \
+		hadolint --ignore DL3008 --ignore DL3018 docker/Dockerfile; \
 	elif command -v docker >/dev/null 2>&1; then \
-		docker run --rm -i hadolint/hadolint hadolint --ignore DL3008 - < docker/Dockerfile; \
+		docker run --rm -i hadolint/hadolint hadolint --ignore DL3008 --ignore DL3018 - < docker/Dockerfile; \
 	else \
 		echo "$(GREEN)✓ hadolint skipped (not installed)$(NC)"; \
 	fi
