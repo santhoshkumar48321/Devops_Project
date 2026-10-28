@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: infrareaper-scanner
+spec:
+  schedule: "*/30 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: scanner
+              env:
+                - name: DRY_RUN
+                  value: "false"
+                - name: ENVIRONMENT
+                  value: "prod"
+                - name: TARGET_RESOURCE_GROUPS
+                  value: "infrareaper-test-resources"
+                - name: LOG_LEVEL
+                  value: "INFO"
+              resources:
+                requests:
+                  cpu: 150m
+                  memory: 192Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi

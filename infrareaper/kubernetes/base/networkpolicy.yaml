@@ -1,0 +1,47 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: infrareaper-scanner-netpol
+  namespace: infrareaper
+  labels:
+    app.kubernetes.io/name: infrareaper-scanner-netpol
+    app.kubernetes.io/component: network-security
+    app.kubernetes.io/part-of: infrareaper
+spec:
+  podSelector:
+    matchLabels:
+      app: infrareaper-scanner
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: [] # Deny all ingress (scanner pod has no listening services)
+  egress:
+    # 1. Allow DNS resolution (port 53 UDP/TCP to CoreDNS)
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # 2. Allow HTTPS outbound to Azure Resource Manager API (443) and SendGrid API (443)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+
+    # 3. Allow internal metrics push to Prometheus Pushgateway on port 9091
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus-pushgateway
+      ports:
+        - protocol: TCP
+          port: 9091

@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: infrareaper-policies
+  namespace: infrareaper
+  labels:
+    app.kubernetes.io/name: infrareaper-policies
+    app.kubernetes.io/component: governance
+    app.kubernetes.io/part-of: infrareaper
+data:
+  tag-policies.yaml: |
+    version: "1.0"
+    policy_name: "azure-enterprise-tag-governance"
+
+    required_tags:
+      - name: "owner"
+        description: "Owner email or identifier responsible for the resource"
+        severity: "CRITICAL"
+        validation:
+          type: "regex"
+          pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$|^[a-zA-Z0-9_-]+$"
+          message: "Owner tag must be a valid email or username"
+
+      - name: "environment"
+        description: "Deployment environment stage"
+        severity: "WARNING"
+        validation:
+          type: "enum"
+          allowed_values:
+            - "dev"
+            - "staging"
+            - "prod"
+            - "test"
+          message: "Environment must be one of: dev, staging, prod, test"
+
+      - name: "expiry-date"
+        description: "Target resource decommissioning date in ISO-8601 format (YYYY-MM-DD)"
+        severity: "WARNING"
+        validation:
+          type: "date"
+          pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          message: "Expiry date must be in YYYY-MM-DD format"
+
+    evaluation_settings:
+      case_sensitive_keys: false
+      case_sensitive_values: false
+      min_compliance_threshold_percent: 85
+
+  lifecycle-rules.yaml: |
+    version: "1.0"
+    policy_name: "azure-resource-lifecycle-governance"
+
+    lifecycle:
+      default_ttl_days: 30
+      grace_period_hours: 48
+      warning_thresholds:
+        seven_day_warning_hours: 168
+        three_day_warning_hours: 72
+        final_warning_hours: 24
+      notification_cooldown_hours: 24
+
+    cleanup:
+      vm_action_before_delete: "deallocate"
+      deallocation_timeout_seconds: 300
+      unattached_disk_ttl_days: 7
+      unassociated_ip_ttl_days: 3
+
+  protected-resources.yaml: |
+    version: "1.0"
+    policy_name: "azure-protected-resources-whitelist"
+
+    protected_resource_groups:
+      - "infrareaper-core-rg"
+      - "infrareaper-state-rg"
+      - "NetworkWatcherRG"
+
+    protected_resource_types:
+      - "Microsoft.ContainerService/managedClusters"
+      - "Microsoft.ContainerRegistry/registries"
+      - "Microsoft.KeyVault/vaults"
+      - "Microsoft.OperationalInsights/workspaces"
+      - "Microsoft.Storage/storageAccounts"
+
+    protected_tags:
+      - key: "protected"
+        value: "true"
+      - key: "do-not-delete"
+        value: "true"
+      - key: "Environment"
+        value: "prod"

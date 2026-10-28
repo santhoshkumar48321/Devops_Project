@@ -1,0 +1,120 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: infrareaper-scanner
+  namespace: infrareaper
+  labels:
+    app.kubernetes.io/name: infrareaper-scanner
+    app.kubernetes.io/component: scanner-cronjob
+    app.kubernetes.io/part-of: infrareaper
+spec:
+  schedule: "*/30 * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: infrareaper-scanner
+            app.kubernetes.io/component: scanner
+            app: infrareaper-scanner
+        spec:
+          serviceAccountName: infrareaper-scanner
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: scanner
+              image: infrareaperacrpalwa.azurecr.io/infrareaper-scanner:latest
+              imagePullPolicy: IfNotPresent
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: false
+                capabilities:
+                  drop:
+                    - ALL
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 250m
+                  memory: 256Mi
+              env:
+                - name: DRY_RUN
+                  value: "true"
+                - name: ENVIRONMENT
+                  value: "base"
+                - name: TARGET_RESOURCE_GROUPS
+                  value: "infrareaper-test-resources"
+                - name: PUSHGATEWAY_URL
+                  value: "http://prometheus-pushgateway.infrareaper.svc.cluster.local:9091"
+                - name: OUTPUT_DIR
+                  value: "/tmp/infrareaper"
+                - name: AZURE_CLIENT_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: infrareaper-secrets
+                      key: AZURE_CLIENT_ID
+                      optional: true
+                - name: AZURE_CLIENT_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: infrareaper-secrets
+                      key: AZURE_CLIENT_SECRET
+                      optional: true
+                - name: AZURE_TENANT_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: infrareaper-secrets
+                      key: AZURE_TENANT_ID
+                      optional: true
+                - name: CLEANUP_CLIENT_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: infrareaper-secrets
+                      key: CLEANUP_CLIENT_ID
+                      optional: true
+                - name: CLEANUP_CLIENT_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: infrareaper-secrets
+                      key: CLEANUP_CLIENT_SECRET
+                      optional: true
+                - name: CLEANUP_TENANT_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: infrareaper-secrets
+                      key: CLEANUP_TENANT_ID
+                      optional: true
+                - name: SENDGRID_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: infrareaper-secrets
+                      key: SENDGRID_API_KEY
+                      optional: true
+              volumeMounts:
+                - name: policy-volume
+                  mountPath: /app/policies
+                  readOnly: true
+                - name: scratch-volume
+                  mountPath: /tmp/infrareaper
+                - name: azure-config-volume
+                  mountPath: /home/infrareaper/.azure
+          volumes:
+            - name: policy-volume
+              configMap:
+                name: infrareaper-policies
+            - name: scratch-volume
+              emptyDir: {}
+            - name: azure-config-volume
+              emptyDir: {}

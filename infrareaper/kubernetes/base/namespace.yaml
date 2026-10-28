@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: infrareaper
+  labels:
+    app.kubernetes.io/name: infrareaper
+    app.kubernetes.io/part-of: infrareaper
+    app.kubernetes.io/managed-by: kustomize

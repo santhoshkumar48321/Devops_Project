@@ -85,7 +85,9 @@ validate-terraform: ## Validate Terraform configuration
 validate-k8s: ## Validate Kubernetes manifests
 	@echo "$(YELLOW)→ Validating Kubernetes manifests...$(NC)"
 	kubectl kustomize kubernetes/base/ > /dev/null
-	@echo "$(GREEN)✓ Kustomize build succeeded$(NC)"
+	kubectl kustomize kubernetes/overlays/dev/ > /dev/null
+	kubectl kustomize kubernetes/overlays/prod/ > /dev/null
+	@echo "$(GREEN)✓ Kustomize build succeeded for base, dev, and prod$(NC)"
 
 # ============================================================
 # SECURITY SCANNING — Find vulnerabilities before deploy
