@@ -53,7 +53,7 @@ lint: lint-shell lint-yaml lint-docker ## Run ALL linters
 
 lint-shell: ## Lint Bash scripts with ShellCheck
 	@echo "$(YELLOW)→ Running ShellCheck...$(NC)"
-	shellcheck scripts/*.sh
+	shellcheck -x -e SC1091 scripts/*.sh
 
 lint-terraform: ## Lint Terraform with fmt check
 	@echo "$(YELLOW)→ Checking Terraform formatting...$(NC)"

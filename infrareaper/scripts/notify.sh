@@ -74,7 +74,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helve
     <h3>Scan Overview</h3>
     <div class='metric-box'><div class='metric-val'>${SCORE}%</div><div>Compliance Score</div></div>
     <div class='metric-box'><div class='metric-val'>${COMPLIANT_RES} / ${TOTAL_RES}</div><div>Compliant Assets</div></div>
-    <div class='metric-box'><div class='metric-val'>${CRIT_COUNT}</div><div>Critical Violations</div></div>
+    <div class='metric-box'><div class='metric-val'>${CRIT_COUNT} / ${WARN_COUNT}</div><div>Violations (Crit/Warn)</div></div>
     <div class='metric-box'><div class='metric-val'>$(( EXP_7D + EXP_72H + EXP_24H ))</div><div>Expiring Resources</div></div>
 
     <h3>Action Summary</h3>

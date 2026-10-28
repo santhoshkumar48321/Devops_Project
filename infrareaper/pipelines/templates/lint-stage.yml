@@ -26,7 +26,7 @@ stages:
 
           - script: |
               echo "=== Step 1: ShellCheck Bash Scripts ==="
-              shellcheck scripts/*.sh
+              shellcheck -x -e SC1091 scripts/*.sh
             workingDirectory: ${{ parameters.workingDirectory }}
             displayName: "Run ShellCheck"
 

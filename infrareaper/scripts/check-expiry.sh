@@ -40,7 +40,7 @@ for (( i=0; i<RESOURCE_COUNT; i++ )); do
     RES_JSON=$(jq -c ".resources[$i]" "${COMPLIANCE_FILE}")
     EXPIRY_DATE=$(echo "${RES_JSON}" | jq -r '.expiry_date // empty')
     IS_ORPHAN=$(echo "${RES_JSON}" | jq -r '.is_orphan')
-    ORPHAN_TYPE=$(echo "${RES_JSON}" | jq -r '.orphan_type // empty')
+
 
     EXPIRY_EPOCH=0
     EFFECTIVE_EXPIRY_DATE=""
