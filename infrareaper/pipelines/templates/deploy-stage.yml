@@ -1,8 +1,8 @@
 # ============================================================
 # Stage Template: Deploy to AKS
 # ============================================================
-# Authenticates with AKS, synchronizes credentials from Key Vault
-# into Kubernetes Secrets, and applies Kustomize overlays.
+# Authenticates with AKS, applies Kustomize overlays, and
+# synchronizes credentials from Key Vault into Kubernetes Secrets.
 # ============================================================
 
 parameters:
@@ -51,10 +51,15 @@ stages:
             displayName: "Connect kubectl to AKS"
 
           - script: |
-              echo "=== Step 2: Ensure Namespace & Sync Key Vault Secrets ==="
+              echo "=== Step 2: Ensure Namespace & Apply Kustomize Overlay (${{ parameters.overlay }}) ==="
               kubectl create namespace "${{ parameters.kubeNamespace }}" --dry-run=client -o yaml | kubectl apply -f -
+              kubectl apply -k "kubernetes/overlays/${{ parameters.overlay }}/"
+            workingDirectory: ${{ parameters.workingDirectory }}
+            displayName: "Apply Kustomize Overlay"
 
-              echo "Retrieving scanner Service Principal credentials from Key Vault..."
+          - script: |
+              echo "=== Step 3: Synchronize Secrets from Key Vault ==="
+              echo "Retrieving scanner Service Principal credentials from Key Vault: ${{ parameters.keyVaultName }}..."
               SP_CLIENT_ID=$(az keyvault secret show --vault-name "${{ parameters.keyVaultName }}" --name AZURE-CLIENT-ID --query value -o tsv)
               SP_SECRET=$(az keyvault secret show --vault-name "${{ parameters.keyVaultName }}" --name AZURE-CLIENT-SECRET --query value -o tsv)
               SP_TENANT=$(az keyvault secret show --vault-name "${{ parameters.keyVaultName }}" --name AZURE-TENANT-ID --query value -o tsv)
@@ -63,17 +68,15 @@ stages:
                 --from-literal=AZURE_CLIENT_ID="${SP_CLIENT_ID}" \
                 --from-literal=AZURE_CLIENT_SECRET="${SP_SECRET}" \
                 --from-literal=AZURE_TENANT_ID="${SP_TENANT}" \
+                --from-literal=CLEANUP_CLIENT_ID="${SP_CLIENT_ID}" \
+                --from-literal=CLEANUP_CLIENT_SECRET="${SP_SECRET}" \
+                --from-literal=CLEANUP_TENANT_ID="${SP_TENANT}" \
+                --from-literal=SENDGRID_API_KEY="" \
                 --dry-run=client -o yaml | kubectl apply -f -
+              echo "Secrets injected successfully into namespace ${{ parameters.kubeNamespace }}."
             displayName: "Synchronize Secrets from Key Vault"
-
-          - script: |
-              echo "=== Step 3: Deploy Kustomize Overlay (${{ parameters.overlay }}) ==="
-              kubectl apply -k "kubernetes/overlays/${{ parameters.overlay }}/"
-            workingDirectory: ${{ parameters.workingDirectory }}
-            displayName: "Apply Kustomize Overlay"
 
           - script: |
               echo "=== Step 4: Verify Cluster Resources ==="
               kubectl get cronjobs,networkpolicies,configmaps,secrets -n "${{ parameters.kubeNamespace }}"
             displayName: "Verify AKS Resources"
-

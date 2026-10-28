@@ -40,21 +40,46 @@ stages:
                 --overwrite-existing
 
               JOB_NAME="smoke-$(Build.BuildId)"
+              echo "Cleaning up any prior test jobs with name '${JOB_NAME}'..."
+              kubectl delete job "${JOB_NAME}" -n "${{ parameters.kubeNamespace }}" --ignore-not-found=true
+
               echo "Creating test Job '${JOB_NAME}' from CronJob 'infrareaper-scanner'..."
               kubectl create job --from=cronjob/infrareaper-scanner "${JOB_NAME}" -n "${{ parameters.kubeNamespace }}"
 
+              echo "Locating Job pod..."
+              POD_NAME=""
+              for i in {1..30}; do
+                POD_NAME=$(kubectl get pods -n "${{ parameters.kubeNamespace }}" -l "job-name=${JOB_NAME}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+                if [ -z "$POD_NAME" ]; then
+                  POD_NAME=$(kubectl get pods -n "${{ parameters.kubeNamespace }}" -l "batch.kubernetes.io/job-name=${JOB_NAME}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+                fi
+                if [ -n "$POD_NAME" ]; then
+                  echo "Found Job pod: ${POD_NAME}"
+                  break
+                fi
+                sleep 2
+              done
+
               echo "Waiting up to ${{ parameters.timeoutSeconds }}s for job execution..."
               if ! kubectl wait --for=condition=complete --timeout=${{ parameters.timeoutSeconds }}s "job/${JOB_NAME}" -n "${{ parameters.kubeNamespace }}"; then
-                echo "Job did not complete successfully or timed out. Pod logs:"
-                kubectl logs -n "${{ parameters.kubeNamespace }}" -l job-name="${JOB_NAME}" --tail=100
+                echo "Job did not complete successfully or timed out. Pod status & diagnostics:"
+                kubectl get pods -n "${{ parameters.kubeNamespace }}" -o wide
+                kubectl describe job "${JOB_NAME}" -n "${{ parameters.kubeNamespace }}"
+                if [ -n "$POD_NAME" ]; then
+                  echo "Logs from pod ${POD_NAME}:"
+                  kubectl logs -n "${{ parameters.kubeNamespace }}" "${POD_NAME}" --tail=100 || true
+                fi
                 kubectl delete job "${JOB_NAME}" -n "${{ parameters.kubeNamespace }}" --ignore-not-found=true
                 exit 1
               fi
 
               echo "Job completed successfully! Streaming logs:"
-              kubectl logs -n "${{ parameters.kubeNamespace }}" -l job-name="${JOB_NAME}" --tail=100
+              if [ -n "$POD_NAME" ]; then
+                kubectl logs -n "${{ parameters.kubeNamespace }}" "${POD_NAME}" --tail=100
+              else
+                kubectl logs -n "${{ parameters.kubeNamespace }}" -l "job-name=${JOB_NAME}" --tail=100
+              fi
 
               echo "Cleaning up smoke test job..."
               kubectl delete job "${JOB_NAME}" -n "${{ parameters.kubeNamespace }}" --ignore-not-found=true
             displayName: "Trigger & Validate AKS Smoke Run"
-
