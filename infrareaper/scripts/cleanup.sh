@@ -37,8 +37,18 @@ fi
 AUDIT_ACTIONS_TEMP="${OUTPUT_DIR}/temp_audit_actions.json"
 echo "[]" > "${AUDIT_ACTIONS_TEMP}"
 
-# Extract all resources flagged as actionable
-CANDIDATES_JSON=$(jq -c '[.resources[] | select(.actionable_for_cleanup == true)]' "${LIFECYCLE_FILE}")
+# Extract all resources flagged as actionable, sorted by dependency order:
+# 1. Virtual Machines (must delete before NICs/Disks)
+# 2. Network Interfaces (must delete before Public IPs/NSGs)
+# 3. Disks, Public IPs, NSGs, Storage Accounts
+CANDIDATES_JSON=$(jq -c '
+    [.resources[] | select(.actionable_for_cleanup == true)] |
+    sort_by(
+        if .type == "Microsoft.Compute/virtualMachines" then 1
+        elif .type == "Microsoft.Network/networkInterfaces" then 2
+        else 3 end
+    )
+' "${LIFECYCLE_FILE}")
 CANDIDATE_COUNT=$(echo "${CANDIDATES_JSON}" | jq 'length')
 
 log_info "Discovered ${CANDIDATE_COUNT} candidate resources eligible for cleanup."
