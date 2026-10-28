@@ -1,102 +1,139 @@
 # InfraReaper 🪦
 
-**Cloud Resource Lifecycle & Cost Manager**
+**Autonomous Cloud Resource Lifecycle, Governance & FinOps Engine on Microsoft Azure**
 
-> *Automated scanning, policy enforcement, and cleanup of cloud resources — because engineers create resources, then forget to delete them.*
+[![Azure](https://img.shields.io/badge/Azure-AKS%20%7C%20ACR%20%7C%20KeyVault-0078D4?logo=microsoftazure&logoColor=white)](https://azure.microsoft.com/)
+[![Terraform](https://img.shields.io/badge/IaC-Terraform%20v1.12-7B42BC?logo=terraform&logoColor=white)](https://www.terraform.io/)
+[![Ansible](https://img.shields.io/badge/Config-Ansible%20Lab%20Automation-EE0000?logo=ansible&logoColor=white)](https://www.ansible.com/)
+[![Kubernetes](https://img.shields.io/badge/Orchestration-Kubernetes%20Kustomize-326CE5?logo=kubernetes&logoColor=white)](https://kubernetes.io/)
+[![CI/CD](https://img.shields.io/badge/CI%2FCD-Azure%20DevOps%20Pipelines-0078D4?logo=azuredevops&logoColor=white)](https://azure.microsoft.com/en-us/products/devops/)
+[![Security](https://img.shields.io/badge/Security-Trivy%200%20CVEs%20%7C%20CIS%20Hardened-00C7B7?logo=aqua&logoColor=white)](https://www.aquasec.com/products/trivy/)
+[![Observability](https://img.shields.io/badge/Observability-Prometheus%20%7C%20Grafana%20%7C%20Loki-F46800?logo=grafana&logoColor=white)](https://grafana.com/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](../LICENSE)
 
 ---
 
-## The Problem
+## 📌 Executive Summary & FinOps Value
 
-Cloud waste averages **25–35% of total cloud spend**. Engineers spin up VMs, storage accounts, and databases for testing, then forget to delete them. Tags are missing or inconsistent. Nobody tracks ownership or expiry. The monthly bill grows silently.
+Cloud waste averages **25%–35% of enterprise cloud spend**, driven by orphaned public IP addresses, unattached virtual disks, mistagged test environments, and abandoned compute instances. 
 
-## The Solution
+**InfraReaper** is a production-grade, enterprise DevOps portfolio solution that continuously inspects, audits, alerts, and safely purges orphaned and expired cloud infrastructure across Microsoft Azure:
+- **Zero Accidental Destruction**: Built-in dry-run simulation mode, protected resource lists, and 48-hour expiration grace periods.
+- **FinOps Cost Attribution**: Real-time identification of zombie assets, projecting monthly waste avoidance.
+- **Full-Stack Observability**: Native Prometheus exposition, Loki log aggregation, and 6 auto-provisioned Grafana production dashboards.
+- **100% Automated CI/CD**: Multi-stage Azure DevOps pipeline executing on a hardened self-hosted lab agent with end-to-end smoke tests on live AKS clusters.
 
-InfraReaper automatically:
-1. **Scans** Azure resources on a schedule (K8s CronJob, every 30 min)
-2. **Evaluates** tag policies — are required tags present? are resources expired?
-3. **Notifies** resource owners via email (SendGrid) about violations and upcoming expirations
-4. **Cleans up** expired resources safely — with protected resource lists, dry-run mode, and audit logging
-5. **Reports** via Grafana dashboards — resource inventory, cost attribution, compliance scores, SLO tracking
+---
 
-## Architecture
-
-```
-Lab Server (Ubuntu 24.04)          Azure Cloud
-┌─────────────────────┐    ┌───────────────────────────────────┐
-│ Azure DevOps Agent  │───►│ AKS Cluster                       │
-│ Ansible Control     │    │  ├── Scanner CronJob (Bash + az)  │
-└─────────────────────┘    │  ├── Prometheus + Pushgateway     │
-                           │  ├── Grafana (SSO via Entra ID)   │
-                           │  ├── Loki + Promtail              │
-                           │  └── AlertManager → SendGrid      │
-                           │                                   │
-                           │ ACR │ Key Vault │ Entra ID        │
-                           └───────────────────────────────────┘
-```
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Infrastructure as Code | Terraform |
-| Configuration Management | Ansible |
-| Container Orchestration | AKS (Kubernetes) |
-| CI/CD | Azure DevOps Pipelines |
-| Scanner Application | Bash + `az cli` + `jq` |
-| Container Registry | Azure Container Registry (ACR) |
-| Secrets Management | Azure Key Vault |
-| Identity & Access | Entra ID (Service Principals, RBAC, SSO) |
-| Monitoring | Prometheus + Grafana |
-| Logging | Loki + Promtail |
-| Notifications | SendGrid (email) |
-| Security Scanning | Trivy (IaC + container images) |
-
-## Project Structure
+## 🏗️ Architecture
 
 ```
-infrareaper/
-├── docs/              # Architecture, requirements, runbook, security model
-├── terraform/         # Azure infrastructure (modules + environments)
-├── ansible/           # Lab server configuration (roles + playbooks)
-├── scripts/           # Scanner application (Bash)
-├── docker/            # Dockerfile + .dockerignore
-├── kubernetes/        # K8s manifests (Kustomize base + overlays)
-├── pipelines/         # Azure DevOps CI/CD pipeline YAML
-├── policies/          # Tag policies, protected resources, lifecycle rules
-└── tests/             # Validation scripts (shellcheck, terraform, kubeval)
+                       ┌───────────────────────────────────────────────────────────────┐
+                       │                   Azure Cloud Infrastructure                  │
+                       │                                                               │
+┌──────────────────┐   │  ┌───────────────────────┐       ┌─────────────────────────┐  │
+│  Ubuntu 24.04    │   │  │ Azure Container Reg   │       │     Azure Key Vault     │  │
+│  Lab Server      │   │  │ (infrareaperacrpalwa) │       │   (infrareaperkv-*)     │  │
+│                  │   │  └───────────▲───────────┘       └────────────▲────────────┘  │
+│ ┌──────────────┐ │   │              │ Image Push                     │ Secrets Sync  │
+│ │AzDO Agent    │─┼───┼──────────────┼────────────────────────────────┼───────────────┤
+│ │(Self-Hosted) │ │   │              ▼                                ▼               │
+│ └──────────────┘ │   │  ┌─────────────────────────────────────────────────────────┐  │
+│ ┌──────────────┐ │   │  │             Azure Kubernetes Service (AKS)              │  │
+│ │Ansible Play  │─┼───┤  │                                                         │  │
+│ └──────────────┘ │   │  │   ┌─────────────────────────────────────────────────┐   │  │
+└──────────────────┘   │  │   │            Namespace: infrareaper               │   │  │
+                       │  │   │                                                 │   │  │
+                       │  │   │  ┌───────────────────┐    ┌──────────────────┐  │   │  │
+                       │  │   │  │ InfraReaper       │───►│ Pushgateway      │  │   │  │
+                       │  │   │  │ Scanner CronJob   │    │ (Port 9091)      │  │   │  │
+                       │  │   │  └─────────┬─────────┘    └────────┬─────────┘  │   │  │
+                       │  │   │            │ Logs                  │ Scrapes    │   │  │
+                       │  │   │            ▼                       ▼            │   │  │
+                       │  │   │  ┌───────────────────┐    ┌──────────────────┐  │   │  │
+                       │  │   │  │ Promtail DaemonSet│    │ Prometheus Core  │  │   │  │
+                       │  │   │  └─────────┬─────────┘    │ (Port 9090)      │  │   │  │
+                       │  │   │            │ Streams      └────────┬─────────┘  │   │  │
+                       │  │   │            ▼                       │ Metrics    │   │  │
+                       │  │   │  ┌───────────────────┐             │            │   │  │
+                       │  │   │  │ Loki Storage      │◄────────────┤            │   │  │
+                       │  │   │  │ (Port 3100)       │             ▼            │   │  │
+                       │  │   │  └─────────┬─────────┘    ┌──────────────────┐  │   │  │
+                       │  │   │            └─────────────►│ Grafana UI       │  │   │  │
+                       │  │   │               LogQL       │ (6 Dashboards)   │  │   │  │
+                       │  │   │                           └──────────────────┘  │   │  │
+                       │  │   └─────────────────────────────────────────────────┘   │  │
+                       │  └─────────────────────────────────────────────────────────┘  │
+                       └───────────────────────────────────────────────────────────────┘
 ```
 
-## Quick Start
+---
+
+## ⚡ 10-Phase Implementation Roadmap
+
+| Phase | Milestone | Focus Areas | Status |
+| :---: | :--- | :--- | :---: |
+| **01** | **Problem Definition** | FinOps governance metrics, tag taxonomy, lifecycle states | Completed |
+| **02** | **Architecture Design** | Micro-architecture, network policies, least privilege RBAC | Completed |
+| **03** | **Git & Workflow Setup** | Feature-branching workflow, pre-commit hooks, linting rules | Completed |
+| **04** | **Ansible Lab Server** | Ubuntu 24.04 hardening, toolchain, self-hosted AzDO agent | Completed |
+| **05** | **Terraform Infrastructure**| 35 Azure resources: AKS, ACR, Key Vault, VNet, Test targets | Completed |
+| **06** | **Scanner Core Engine** | Bash + `az cli` + `jq`, policy evaluation, cleanup engine | Completed |
+| **07** | **Docker Hardening** | Azure Linux 3.0 base, non-root UID 10001, Trivy CVE mitigation | Completed |
+| **08** | **Kubernetes Manifests** | Batch CronJob, NetworkPolicy, Kustomize dev/prod overlays | Completed |
+| **09** | **Azure DevOps CI/CD** | 5-stage automated pipeline: Lint, Scan, Build, Deploy, Smoke Test | Completed |
+| **10** | **Observability Stack** | Prometheus, Pushgateway, Alertmanager, Loki, 6 Grafana boards | Completed |
+
+---
+
+## 📊 The 6 Production Grafana Dashboards
+
+The monitoring stack includes 6 pre-provisioned dashboards loaded directly into Grafana:
+
+1. **`1. InfraReaper - Scanner SLO & Availability`**: Live calculation of scanner availability against the **99.0% SLO target**, error budget burn rate, and latency tracking (~100s).
+2. **`2. InfraReaper - Tag & Policy Governance Compliance`**: Percentage score (30%) based on mandatory tags (`Environment`, `Owner`, `Project`, `CostCenter`, `ExpireDate`), tracking Critical (7) vs. Warning (14) violations.
+3. **`3. InfraReaper - Cloud Resource Inventory`**: 10 discovered cloud assets, tracking 2 orphaned resources (`test-orphan-ip`, `test-unattached-disk`), and compliance ratios.
+4. **`4. InfraReaper - Resource Lifecycle & Expiry States`**: Warning windows (7d, 72h, 24h), 48h grace periods, and simulated (dry-run) vs. real purge counters.
+5. **`5. InfraReaper - Cloud Cost & Waste Attribution`**: FinOps waste estimation, projecting monthly savings from purging idle public IPs and unattached disks.
+6. **`6. InfraReaper - Scanner System Health & Logs`**: Component health (Pushgateway `UP`, Prometheus `UP`) with an embedded real-time LogQL terminal powered by Loki.
+
+---
+
+## 🚀 Developer Quick Start
 
 ```bash
-# Lint everything
+# 1. Lint everything
 make lint
 
-# Build scanner image
-make build IMAGE_TAG=dev
+# 2. Run scanner unit test suite
+make test-scripts
 
-# Security scan
+# 3. Security scans with Trivy
 make scan
 
-# Deploy to AKS (dev)
+# 4. Deploy Dev overlay to AKS
 make deploy
+
+# 5. Deploy the full observability stack (Prometheus, Grafana, Loki)
+make deploy-monitoring
+
+# 6. Forward Grafana to localhost (port 3000)
+make port-forward-grafana
 ```
 
-## Documentation
+---
 
-- [Requirements](docs/requirements.md)
-- [Architecture](docs/architecture.md)
+## 📖 Complete Documentation
+
+- [Architecture Specification](docs/architecture.md)
+- [Requirements & Specifications](docs/requirements.md)
 - [Deployment Guide](docs/deployment-guide.md)
-- [Security Model](docs/security-model.md)
-- [Monitoring](docs/monitoring.md)
-- [Runbook](docs/runbook.md)
-- [Cost Analysis](docs/cost-analysis.md)
+- [Monitoring & Observability Guide](docs/monitoring-guide.md)
+- [Security & Threat Model](docs/security-model.md)
+- [Operations & Troubleshooting Runbook](docs/runbook.md)
 
-## Status
+---
 
-🚧 **In Development** — Building phase by phase.
+## 📄 License
 
-## License
-
-MIT
+This project is licensed under the [MIT License](../LICENSE).
