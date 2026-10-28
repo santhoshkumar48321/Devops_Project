@@ -93,7 +93,7 @@ for rg in "${TARGET_RGS[@]}"; do
                 elif (.id as $item_id | $orphan_ip_ids | index($item_id)) != null then "unassociated_public_ip"
                 else null end
             ),
-            created_time: .createdTime // null,
+            created_time: (.createdTime // null),
             scanned_at: $scan_time
         })
         ' > "${MERGED_RG_FILE}"
