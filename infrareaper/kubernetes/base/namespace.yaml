@@ -6,3 +6,4 @@ metadata:
     app.kubernetes.io/name: infrareaper
     app.kubernetes.io/part-of: infrareaper
     app.kubernetes.io/managed-by: kustomize
+

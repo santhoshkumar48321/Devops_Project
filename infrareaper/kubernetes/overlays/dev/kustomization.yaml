@@ -16,5 +16,7 @@ patches:
       kind: CronJob
       name: infrareaper-scanner
 
-commonLabels:
-  app.kubernetes.io/environment: dev
+labels:
+  - pairs:
+      app.kubernetes.io/environment: dev
+

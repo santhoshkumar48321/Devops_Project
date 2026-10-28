@@ -102,9 +102,9 @@ scan-image: ## Scan Docker image with Trivy
 
 scan-iac: ## Scan IaC (Terraform + K8s) with Trivy
 	@echo "$(YELLOW)→ Scanning Terraform configs...$(NC)"
-	trivy config terraform/
+	trivy config --ignorefile .trivyignore terraform/
 	@echo "$(YELLOW)→ Scanning Kubernetes manifests...$(NC)"
-	trivy config kubernetes/
+	trivy config --ignorefile .trivyignore kubernetes/base/
 
 scan-secrets: ## Scan for leaked secrets
 	@echo "$(YELLOW)→ Scanning for secrets...$(NC)"

@@ -34,11 +34,11 @@ spec:
               type: RuntimeDefault
           containers:
             - name: scanner
-              image: infrareaperacrpalwa.azurecr.io/infrareaper-scanner:latest
+              image: infrareaperacrpalwa.azurecr.io/infrareaper-scanner:v1.0.0
               imagePullPolicy: IfNotPresent
               securityContext:
                 allowPrivilegeEscalation: false
-                readOnlyRootFilesystem: false
+                readOnlyRootFilesystem: true
                 capabilities:
                   drop:
                     - ALL
@@ -107,7 +107,7 @@ spec:
                   mountPath: /app/policies
                   readOnly: true
                 - name: scratch-volume
-                  mountPath: /tmp/infrareaper
+                  mountPath: /tmp
                 - name: azure-config-volume
                   mountPath: /home/infrareaper/.azure
           volumes:
@@ -118,3 +118,4 @@ spec:
               emptyDir: {}
             - name: azure-config-volume
               emptyDir: {}
+
