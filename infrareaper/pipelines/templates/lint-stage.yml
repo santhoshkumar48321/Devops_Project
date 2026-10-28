@@ -1,0 +1,64 @@
+# ============================================================
+# Stage Template: Lint & Code Validation
+# ============================================================
+# Performs static analysis, syntax validation, policy checks,
+# and unit testing across all codebase assets prior to build.
+# ============================================================
+
+parameters:
+  - name: workingDirectory
+    type: string
+    default: "$(Build.SourcesDirectory)/infrareaper"
+
+stages:
+  - stage: Lint_and_Validate
+    displayName: "Lint & Code Validation"
+    jobs:
+      - job: Lint_and_Test
+        displayName: "Static Analysis & Unit Tests"
+        pool:
+          name: Default
+          demands:
+            - Agent.Name -equals infrareaper-lab-agent
+        steps:
+          - checkout: self
+            fetchDepth: 1
+
+          - script: |
+              echo "=== Step 1: ShellCheck Bash Scripts ==="
+              shellcheck scripts/*.sh
+            workingDirectory: ${{ parameters.workingDirectory }}
+            displayName: "Run ShellCheck"
+
+          - script: |
+              echo "=== Step 2: Dockerfile Linting (Hadolint) ==="
+              make lint-docker
+            workingDirectory: ${{ parameters.workingDirectory }}
+            displayName: "Run Hadolint"
+
+          - script: |
+              echo "=== Step 3: YAML Linting ==="
+              make lint-yaml
+            workingDirectory: ${{ parameters.workingDirectory }}
+            displayName: "Run Yamllint"
+
+          - script: |
+              echo "=== Step 4: Terraform Format & Syntax Validation ==="
+              terraform fmt -check -recursive terraform/
+              cd terraform/environments/dev
+              terraform init -backend=false
+              terraform validate
+            workingDirectory: ${{ parameters.workingDirectory }}
+            displayName: "Validate Terraform"
+
+          - script: |
+              echo "=== Step 5: Kubernetes Manifests & Overlays Validation ==="
+              make validate-k8s
+            workingDirectory: ${{ parameters.workingDirectory }}
+            displayName: "Validate Kubernetes (Kustomize)"
+
+          - script: |
+              echo "=== Step 6: Scanner Engine Test Suite ==="
+              make test-scripts
+            workingDirectory: ${{ parameters.workingDirectory }}
+            displayName: "Execute Scanner Unit Tests"

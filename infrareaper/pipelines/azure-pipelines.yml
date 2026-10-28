@@ -1,0 +1,85 @@
+# ============================================================
+# InfraReaper CI/CD Multi-Stage Pipeline (Azure DevOps)
+# ============================================================
+# Hardened, enterprise-grade multi-stage CI/CD pipeline executing
+# on the self-hosted lab agent (infrareaper-lab-agent).
+#
+# Pipeline Architecture:
+#   Stage 1: Lint & Code Validation (ShellCheck, Hadolint, Yamllint, Terraform, K8s, Unit Tests)
+#   Stage 2: Security & IaC Scanning (Trivy K8s, Trivy Terraform, Secrets)
+#   Stage 3: Container Build & Vulnerability Scan (Docker build, Trivy image scan, ACR push)
+#   Stage 4: Continuous Deployment to AKS (Kustomize overlays, Key Vault secret sync)
+#   Stage 5: Live Smoke Test Verification (Trigger on-demand AKS Job, stream logs, assert health)
+# ============================================================
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - infrareaper/**
+
+pr:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - infrareaper/**
+
+pool:
+  name: Default
+  demands:
+    - Agent.Name -equals infrareaper-lab-agent
+
+variables:
+  - name: ACR_NAME
+    value: "infrareaperacrpalwa"
+  - name: ACR_LOGIN_SERVER
+    value: "infrareaperacrpalwa.azurecr.io"
+  - name: IMAGE_REPOSITORY
+    value: "infrareaper-scanner"
+  - name: AKS_CLUSTER_NAME
+    value: "infrareaper-aks"
+  - name: AKS_RESOURCE_GROUP
+    value: "infrareaper-core-rg"
+  - name: KEYVAULT_NAME
+    value: "infrareaperkv-k9r9y"
+  - name: KUBE_NAMESPACE
+    value: "infrareaper"
+  - name: WORKING_DIR
+    value: "$(Build.SourcesDirectory)/infrareaper"
+
+stages:
+  - template: templates/lint-stage.yml
+    parameters:
+      workingDirectory: $(WORKING_DIR)
+
+  - template: templates/security-stage.yml
+    parameters:
+      workingDirectory: $(WORKING_DIR)
+
+  - template: templates/build-stage.yml
+    parameters:
+      workingDirectory: $(WORKING_DIR)
+      acrName: $(ACR_NAME)
+      acrLoginServer: $(ACR_LOGIN_SERVER)
+      imageRepository: $(IMAGE_REPOSITORY)
+      imageTag: $(Build.BuildId)
+
+  - template: templates/deploy-stage.yml
+    parameters:
+      workingDirectory: $(WORKING_DIR)
+      aksClusterName: $(AKS_CLUSTER_NAME)
+      aksResourceGroup: $(AKS_RESOURCE_GROUP)
+      keyVaultName: $(KEYVAULT_NAME)
+      kubeNamespace: $(KUBE_NAMESPACE)
+      overlay: "dev"
+
+  - template: templates/smoke-test-stage.yml
+    parameters:
+      aksClusterName: $(AKS_CLUSTER_NAME)
+      aksResourceGroup: $(AKS_RESOURCE_GROUP)
+      kubeNamespace: $(KUBE_NAMESPACE)
+      timeoutSeconds: 240

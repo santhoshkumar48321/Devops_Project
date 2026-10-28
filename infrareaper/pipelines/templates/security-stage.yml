@@ -1,0 +1,44 @@
+# ============================================================
+# Stage Template: Security & IaC Scanning
+# ============================================================
+# Scans Infrastructure-as-Code configurations, Kubernetes
+# manifests, and source files for vulnerabilities and secrets.
+# ============================================================
+
+parameters:
+  - name: workingDirectory
+    type: string
+    default: "$(Build.SourcesDirectory)/infrareaper"
+
+stages:
+  - stage: Security_Scan
+    displayName: "Security & Vulnerability Scan"
+    dependsOn: Lint_and_Validate
+    jobs:
+      - job: Trivy_IaC_and_Secrets
+        displayName: "Trivy IaC & Secret Audits"
+        pool:
+          name: Default
+          demands:
+            - Agent.Name -equals infrareaper-lab-agent
+        steps:
+          - checkout: self
+            fetchDepth: 1
+
+          - script: |
+              echo "=== Step 1: Scan Kubernetes Manifests (CIS Compliance) ==="
+              trivy config --severity CRITICAL,HIGH --ignorefile .trivyignore --exit-code 1 kubernetes/base/
+            workingDirectory: ${{ parameters.workingDirectory }}
+            displayName: "Trivy Scan K8s Manifests"
+
+          - script: |
+              echo "=== Step 2: Scan Terraform Configurations ==="
+              trivy config --severity CRITICAL,HIGH --ignorefile .trivyignore terraform/
+            workingDirectory: ${{ parameters.workingDirectory }}
+            displayName: "Trivy Scan Terraform IaC"
+
+          - script: |
+              echo "=== Step 3: Scan Repository for Leaked Secrets ==="
+              trivy fs --scanners secret --exit-code 1 .
+            workingDirectory: ${{ parameters.workingDirectory }}
+            displayName: "Trivy Secret Detection"

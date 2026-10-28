@@ -1,0 +1,69 @@
+# ============================================================
+# Stage Template: Container Build, Security Scan & ACR Push
+# ============================================================
+# Builds hardened container image, runs Trivy vulnerability
+# inspection against the image layers, and pushes to Azure ACR.
+# ============================================================
+
+parameters:
+  - name: workingDirectory
+    type: string
+    default: "$(Build.SourcesDirectory)/infrareaper"
+  - name: acrName
+    type: string
+    default: "infrareaperacrpalwa"
+  - name: acrLoginServer
+    type: string
+    default: "infrareaperacrpalwa.azurecr.io"
+  - name: imageRepository
+    type: string
+    default: "infrareaper-scanner"
+  - name: imageTag
+    type: string
+    default: "$(Build.BuildId)"
+
+stages:
+  - stage: Build_and_Scan_Image
+    displayName: "Container Build & Security Scan"
+    dependsOn: Security_Scan
+    jobs:
+      - job: Docker_Build_Scan_Push
+        displayName: "Build, Scan & ACR Push"
+        pool:
+          name: Default
+          demands:
+            - Agent.Name -equals infrareaper-lab-agent
+        steps:
+          - checkout: self
+            fetchDepth: 1
+
+          - script: |
+              echo "=== Step 1: ACR Authentication ==="
+              az acr login --name ${{ parameters.acrName }}
+            workingDirectory: ${{ parameters.workingDirectory }}
+            displayName: "Authenticate with ACR"
+
+          - script: |
+              echo "=== Step 2: Build Docker Image ==="
+              IMAGE_BUILD="${{ parameters.acrLoginServer }}/${{ parameters.imageRepository }}:${{ parameters.imageTag }}"
+              IMAGE_DEV="${{ parameters.acrLoginServer }}/${{ parameters.imageRepository }}:dev"
+              docker build -t "$IMAGE_BUILD" -t "$IMAGE_DEV" -f docker/Dockerfile .
+            workingDirectory: ${{ parameters.workingDirectory }}
+            displayName: "Build Docker Image"
+
+          - script: |
+              echo "=== Step 3: Trivy Container Vulnerability Scan ==="
+              IMAGE_BUILD="${{ parameters.acrLoginServer }}/${{ parameters.imageRepository }}:${{ parameters.imageTag }}"
+              trivy image --severity CRITICAL,HIGH --ignorefile .trivyignore --exit-code 1 "$IMAGE_BUILD"
+            workingDirectory: ${{ parameters.workingDirectory }}
+            displayName: "Scan Image with Trivy"
+
+          - script: |
+              echo "=== Step 4: Push Image to Azure Container Registry ==="
+              IMAGE_BUILD="${{ parameters.acrLoginServer }}/${{ parameters.imageRepository }}:${{ parameters.imageTag }}"
+              IMAGE_DEV="${{ parameters.acrLoginServer }}/${{ parameters.imageRepository }}:dev"
+              docker push "$IMAGE_BUILD"
+              docker push "$IMAGE_DEV"
+            condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+            workingDirectory: ${{ parameters.workingDirectory }}
+            displayName: "Push Images to ACR"

@@ -1,0 +1,59 @@
+# ============================================================
+# Stage Template: Automated Smoke Test on AKS
+# ============================================================
+# Triggers an on-demand Job from the deployed CronJob on AKS,
+# monitors pod execution, asserts success, and streams logs.
+# ============================================================
+
+parameters:
+  - name: aksClusterName
+    type: string
+    default: "infrareaper-aks"
+  - name: aksResourceGroup
+    type: string
+    default: "infrareaper-core-rg"
+  - name: kubeNamespace
+    type: string
+    default: "infrareaper"
+  - name: timeoutSeconds
+    type: number
+    default: 240
+
+stages:
+  - stage: Smoke_Test
+    displayName: "Automated Smoke Test on AKS"
+    dependsOn: Deploy_AKS
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - job: Smoke_Test_Execution
+        displayName: "Execute & Validate AKS Job"
+        pool:
+          name: Default
+          demands:
+            - Agent.Name -equals infrareaper-lab-agent
+        steps:
+          - script: |
+              echo "=== Step 1: Connect to AKS Cluster ==="
+              az aks get-credentials \
+                --resource-group "${{ parameters.aksResourceGroup }}" \
+                --name "${{ parameters.aksClusterName }}" \
+                --overwrite-existing
+
+              JOB_NAME="smoke-$(Build.BuildId)"
+              echo "Creating test Job '${JOB_NAME}' from CronJob 'infrareaper-scanner'..."
+              kubectl create job --from=cronjob/infrareaper-scanner "${JOB_NAME}" -n "${{ parameters.kubeNamespace }}"
+
+              echo "Waiting up to ${{ parameters.timeoutSeconds }}s for job execution..."
+              if ! kubectl wait --for=condition=complete --timeout=${{ parameters.timeoutSeconds }}s "job/${JOB_NAME}" -n "${{ parameters.kubeNamespace }}"; then
+                echo "Job did not complete successfully or timed out. Pod logs:"
+                kubectl logs -n "${{ parameters.kubeNamespace }}" -l job-name="${JOB_NAME}" --tail=100
+                kubectl delete job "${JOB_NAME}" -n "${{ parameters.kubeNamespace }}" --ignore-not-found=true
+                exit 1
+              fi
+
+              echo "Job completed successfully! Streaming logs:"
+              kubectl logs -n "${{ parameters.kubeNamespace }}" -l job-name="${JOB_NAME}" --tail=100
+
+              echo "Cleaning up smoke test job..."
+              kubectl delete job "${JOB_NAME}" -n "${{ parameters.kubeNamespace }}" --ignore-not-found=true
+            displayName: "Trigger & Validate AKS Smoke Run"

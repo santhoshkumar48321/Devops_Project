@@ -1,0 +1,78 @@
+# ============================================================
+# Stage Template: Deploy to AKS
+# ============================================================
+# Authenticates with AKS, synchronizes credentials from Key Vault
+# into Kubernetes Secrets, and applies Kustomize overlays.
+# ============================================================
+
+parameters:
+  - name: workingDirectory
+    type: string
+    default: "$(Build.SourcesDirectory)/infrareaper"
+  - name: aksClusterName
+    type: string
+    default: "infrareaper-aks"
+  - name: aksResourceGroup
+    type: string
+    default: "infrareaper-core-rg"
+  - name: keyVaultName
+    type: string
+    default: "infrareaperkv-k9r9y"
+  - name: kubeNamespace
+    type: string
+    default: "infrareaper"
+  - name: overlay
+    type: string
+    default: "dev"
+
+stages:
+  - stage: Deploy_AKS
+    displayName: "Deploy to AKS (${{ parameters.overlay }})"
+    dependsOn: Build_and_Scan_Image
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - job: Deploy_K8s_Manifests
+        displayName: "Deploy K8s Overlays"
+        pool:
+          name: Default
+          demands:
+            - Agent.Name -equals infrareaper-lab-agent
+        steps:
+          - checkout: self
+            fetchDepth: 1
+
+          - script: |
+              echo "=== Step 1: Connect to AKS Cluster ==="
+              az aks get-credentials \
+                --resource-group "${{ parameters.aksResourceGroup }}" \
+                --name "${{ parameters.aksClusterName }}" \
+                --overwrite-existing
+              kubectl get nodes
+            displayName: "Connect kubectl to AKS"
+
+          - script: |
+              echo "=== Step 2: Ensure Namespace & Sync Key Vault Secrets ==="
+              kubectl create namespace "${{ parameters.kubeNamespace }}" --dry-run=client -o yaml | kubectl apply -f -
+
+              echo "Retrieving scanner Service Principal credentials from Key Vault..."
+              SP_CLIENT_ID=$(az keyvault secret show --vault-name "${{ parameters.keyVaultName }}" --name AZURE-CLIENT-ID --query value -o tsv)
+              SP_SECRET=$(az keyvault secret show --vault-name "${{ parameters.keyVaultName }}" --name AZURE-CLIENT-SECRET --query value -o tsv)
+              SP_TENANT=$(az keyvault secret show --vault-name "${{ parameters.keyVaultName }}" --name AZURE-TENANT-ID --query value -o tsv)
+
+              kubectl create secret generic infrareaper-secrets -n "${{ parameters.kubeNamespace }}" \
+                --from-literal=AZURE_CLIENT_ID="${SP_CLIENT_ID}" \
+                --from-literal=AZURE_CLIENT_SECRET="${SP_SECRET}" \
+                --from-literal=AZURE_TENANT_ID="${SP_TENANT}" \
+                --dry-run=client -o yaml | kubectl apply -f -
+            displayName: "Synchronize Secrets from Key Vault"
+
+          - script: |
+              echo "=== Step 3: Deploy Kustomize Overlay (${{ parameters.overlay }}) ==="
+              kubectl apply -k "kubernetes/overlays/${{ parameters.overlay }}/"
+            workingDirectory: ${{ parameters.workingDirectory }}
+            displayName: "Apply Kustomize Overlay"
+
+          - script: |
+              echo "=== Step 4: Verify Cluster Resources ==="
+              kubectl get cronjobs,networkpolicies,configmaps,secrets -n "${{ parameters.kubeNamespace }}"
+            displayName: "Verify AKS Resources"
