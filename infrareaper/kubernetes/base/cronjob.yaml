@@ -34,8 +34,8 @@ spec:
               type: RuntimeDefault
           containers:
             - name: scanner
-              image: infrareaperacrpalwa.azurecr.io/infrareaper-scanner:v1.0.0
-              imagePullPolicy: IfNotPresent
+              image: infrareaperacrpalwa.azurecr.io/infrareaper-scanner:v1.1.0
+              imagePullPolicy: Always
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
