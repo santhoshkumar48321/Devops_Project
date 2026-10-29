@@ -7,9 +7,10 @@
 # Pipeline Architecture:
 #   Stage 1: Lint & Code Validation (ShellCheck, Hadolint, Yamllint, Terraform, K8s, Unit Tests)
 #   Stage 2: Security & IaC Scanning (Trivy K8s, Trivy Terraform, Secrets)
-#   Stage 3: Container Build & Vulnerability Scan (Docker build, Trivy image scan, ACR push)
-#   Stage 4: Continuous Deployment to AKS (Kustomize overlays, Key Vault secret sync)
-#   Stage 5: Live Smoke Test Verification (Trigger on-demand AKS Job, stream logs, assert health)
+#   Stage 3: Terraform Infrastructure Provisioning (AKS, ACR, Key Vault, RGs)
+#   Stage 4: Container Build & Vulnerability Scan (Docker build, Trivy image scan, ACR push)
+#   Stage 5: Continuous Deployment to AKS (Kustomize overlays, Key Vault secret sync)
+#   Stage 6: Live Smoke Test Verification (Trigger on-demand AKS Job, stream logs, assert health)
 # ============================================================
 
 trigger:
@@ -50,16 +51,29 @@ variables:
     value: "infrareaper"
   - name: WORKING_DIR
     value: "$(Build.SourcesDirectory)/infrareaper"
+  - name: TERRAFORM_DIR
+    value: "terraform/environments/dev"
 
 stages:
+  # Stage 1: Static analysis, linting and unit tests
   - template: templates/lint-stage.yml
     parameters:
       workingDirectory: $(WORKING_DIR)
 
+  # Stage 2: CIS benchmark, IaC security & secret leakage scan
   - template: templates/security-stage.yml
     parameters:
       workingDirectory: $(WORKING_DIR)
 
+  # Stage 3: Infrastructure Provisioning using Terraform
+  - template: templates/terraform-stage.yml
+    parameters:
+      workingDirectory: $(WORKING_DIR)
+      terraformDir: $(TERRAFORM_DIR)
+      environment: "dev"
+      autoApprove: true
+
+  # Stage 4: Container Build, Trivy scanning and ACR Push
   - template: templates/build-stage.yml
     parameters:
       workingDirectory: $(WORKING_DIR)
@@ -68,6 +82,7 @@ stages:
       imageRepository: $(IMAGE_REPOSITORY)
       imageTag: $(Build.BuildId)
 
+  # Stage 5: Deploy K8s manifests, sync Key Vault secrets, deploy Prometheus/Grafana
   - template: templates/deploy-stage.yml
     parameters:
       workingDirectory: $(WORKING_DIR)
@@ -77,10 +92,10 @@ stages:
       kubeNamespace: $(KUBE_NAMESPACE)
       overlay: "dev"
 
+  # Stage 6: Automated Smoke Test validation on AKS
   - template: templates/smoke-test-stage.yml
     parameters:
       aksClusterName: $(AKS_CLUSTER_NAME)
       aksResourceGroup: $(AKS_RESOURCE_GROUP)
       kubeNamespace: $(KUBE_NAMESPACE)
       timeoutSeconds: 240
-

@@ -59,7 +59,7 @@ stages:
               echo "=== Step 4: Terraform Apply ==="
               cd ${{ parameters.terraformDir }}
               terraform apply -input=false -auto-approve tfplan
-            condition: and(succeeded(), ${{ parameters.autoApprove }})
+            condition: and(succeeded(), eq('${{ parameters.autoApprove }}', 'true'))
             workingDirectory: ${{ parameters.workingDirectory }}
             displayName: "Terraform Apply"
 
