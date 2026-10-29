@@ -59,13 +59,21 @@ stages:
 
           - script: |
               echo "=== Step 3: Synchronize Secrets from Key Vault ==="
-              echo "Retrieving scanner and cleanup credentials from Key Vault: ${{ parameters.keyVaultName }}..."
-              SP_CLIENT_ID=$(az keyvault secret show --vault-name "${{ parameters.keyVaultName }}" --name AZURE-CLIENT-ID --query value -o tsv)
-              SP_SECRET=$(az keyvault secret show --vault-name "${{ parameters.keyVaultName }}" --name AZURE-CLIENT-SECRET --query value -o tsv)
-              SP_TENANT=$(az keyvault secret show --vault-name "${{ parameters.keyVaultName }}" --name AZURE-TENANT-ID --query value -o tsv)
-              CLEANUP_CLIENT_ID=$(az keyvault secret show --vault-name "${{ parameters.keyVaultName }}" --name CLEANUP-CLIENT-ID --query value -o tsv)
-              CLEANUP_CLIENT_SECRET=$(az keyvault secret show --vault-name "${{ parameters.keyVaultName }}" --name CLEANUP-CLIENT-SECRET --query value -o tsv)
-              SENDGRID_KEY=$(az keyvault secret show --vault-name "${{ parameters.keyVaultName }}" --name SENDGRID-API-KEY --query value -o tsv 2>/dev/null || echo "")
+              VAULT_NAME="${{ parameters.keyVaultName }}"
+              if ! az keyvault show --name "$VAULT_NAME" &>/dev/null; then
+                DISCOVERED_KV=$(az keyvault list --resource-group "${{ parameters.aksResourceGroup }}" --query "[0].name" -o tsv 2>/dev/null || true)
+                if [ -n "$DISCOVERED_KV" ]; then
+                  echo "Discovered active Key Vault: $DISCOVERED_KV"
+                  VAULT_NAME="$DISCOVERED_KV"
+                fi
+              fi
+              echo "Retrieving scanner and cleanup credentials from Key Vault: ${VAULT_NAME}..."
+              SP_CLIENT_ID=$(az keyvault secret show --vault-name "${VAULT_NAME}" --name AZURE-CLIENT-ID --query value -o tsv)
+              SP_SECRET=$(az keyvault secret show --vault-name "${VAULT_NAME}" --name AZURE-CLIENT-SECRET --query value -o tsv)
+              SP_TENANT=$(az keyvault secret show --vault-name "${VAULT_NAME}" --name AZURE-TENANT-ID --query value -o tsv)
+              CLEANUP_CLIENT_ID=$(az keyvault secret show --vault-name "${VAULT_NAME}" --name CLEANUP-CLIENT-ID --query value -o tsv)
+              CLEANUP_CLIENT_SECRET=$(az keyvault secret show --vault-name "${VAULT_NAME}" --name CLEANUP-CLIENT-SECRET --query value -o tsv)
+              SENDGRID_KEY=$(az keyvault secret show --vault-name "${VAULT_NAME}" --name SENDGRID-API-KEY --query value -o tsv 2>/dev/null || echo "")
 
               kubectl create secret generic infrareaper-secrets -n "${{ parameters.kubeNamespace }}" \
                 --from-literal=AZURE_CLIENT_ID="${SP_CLIENT_ID}" \

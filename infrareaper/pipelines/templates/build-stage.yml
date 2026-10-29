@@ -39,34 +39,53 @@ stages:
 
           - script: |
               echo "=== Step 1: ACR Authentication ==="
-              az acr login --name ${{ parameters.acrName }}
+              TARGET_ACR="${{ parameters.acrName }}"
+              if ! az acr show --name "$TARGET_ACR" &>/dev/null; then
+                DISCOVERED_ACR=$(az acr list --resource-group infrareaper-core-rg --query "[0].name" -o tsv 2>/dev/null || true)
+                if [ -n "$DISCOVERED_ACR" ]; then
+                  echo "Discovered active ACR from infrastructure: $DISCOVERED_ACR"
+                  TARGET_ACR="$DISCOVERED_ACR"
+                fi
+              fi
+              echo "Logging in to Azure Container Registry '$TARGET_ACR'..."
+              az acr login --name "$TARGET_ACR"
+              echo "##vso[task.setvariable variable=RESOLVED_ACR_NAME]$TARGET_ACR"
             workingDirectory: ${{ parameters.workingDirectory }}
             displayName: "Authenticate with ACR"
 
           - script: |
               echo "=== Step 2: Build Docker Image ==="
-              IMAGE_BUILD="${{ parameters.acrLoginServer }}/${{ parameters.imageRepository }}:${{ parameters.imageTag }}"
-              IMAGE_DEV="${{ parameters.acrLoginServer }}/${{ parameters.imageRepository }}:dev"
-              IMAGE_V11="${{ parameters.acrLoginServer }}/${{ parameters.imageRepository }}:v1.1.0"
+              TARGET_ACR="$(RESOLVED_ACR_NAME)"
+              if [ -z "$TARGET_ACR" ]; then
+                TARGET_ACR="${{ parameters.acrName }}"
+              fi
+              LOGIN_SERVER=$(az acr show --name "$TARGET_ACR" --query loginServer -o tsv 2>/dev/null || echo "${{ parameters.acrLoginServer }}")
+              echo "Target Login Server: $LOGIN_SERVER"
+
+              IMAGE_BUILD="${LOGIN_SERVER}/${{ parameters.imageRepository }}:${{ parameters.imageTag }}"
+              IMAGE_DEV="${LOGIN_SERVER}/${{ parameters.imageRepository }}:dev"
+              IMAGE_V11="${LOGIN_SERVER}/${{ parameters.imageRepository }}:v1.1.0"
+
               docker build -t "$IMAGE_BUILD" -t "$IMAGE_DEV" -t "$IMAGE_V11" -f docker/Dockerfile .
+
+              echo "##vso[task.setvariable variable=IMAGE_TO_SCAN]$IMAGE_BUILD"
+              echo "##vso[task.setvariable variable=IMAGE_BUILD_TAG]$IMAGE_BUILD"
+              echo "##vso[task.setvariable variable=IMAGE_DEV_TAG]$IMAGE_DEV"
+              echo "##vso[task.setvariable variable=IMAGE_V11_TAG]$IMAGE_V11"
             workingDirectory: ${{ parameters.workingDirectory }}
             displayName: "Build Docker Image"
 
           - script: |
               echo "=== Step 3: Trivy Container Vulnerability Scan ==="
-              IMAGE_BUILD="${{ parameters.acrLoginServer }}/${{ parameters.imageRepository }}:${{ parameters.imageTag }}"
-              trivy image --severity CRITICAL,HIGH --ignorefile .trivyignore --exit-code 1 "$IMAGE_BUILD"
+              trivy image --severity CRITICAL,HIGH --ignorefile .trivyignore --exit-code 1 "$(IMAGE_TO_SCAN)"
             workingDirectory: ${{ parameters.workingDirectory }}
             displayName: "Scan Image with Trivy"
 
           - script: |
               echo "=== Step 4: Push Image to Azure Container Registry ==="
-              IMAGE_BUILD="${{ parameters.acrLoginServer }}/${{ parameters.imageRepository }}:${{ parameters.imageTag }}"
-              IMAGE_DEV="${{ parameters.acrLoginServer }}/${{ parameters.imageRepository }}:dev"
-              IMAGE_V11="${{ parameters.acrLoginServer }}/${{ parameters.imageRepository }}:v1.1.0"
-              docker push "$IMAGE_BUILD"
-              docker push "$IMAGE_DEV"
-              docker push "$IMAGE_V11"
+              docker push "$(IMAGE_BUILD_TAG)"
+              docker push "$(IMAGE_DEV_TAG)"
+              docker push "$(IMAGE_V11_TAG)"
             condition: and(succeeded(), or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), eq(variables['Build.Reason'], 'Manual'), contains(variables['Build.SourceBranch'], 'phase')))
             workingDirectory: ${{ parameters.workingDirectory }}
             displayName: "Push Images to ACR"

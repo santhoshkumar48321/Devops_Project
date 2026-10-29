@@ -4,6 +4,7 @@
 # Provisions and ensures all Azure cloud infrastructure (RG,
 # VNet, AKS, ACR, Key Vault, Role Assignments, Test Sandbox)
 # using Terraform with remote Azure Blob Storage backend.
+# Self-bootstraps remote state storage if Azure is empty.
 # ============================================================
 
 parameters:
@@ -42,21 +43,78 @@ stages:
             displayName: "Verify Azure CLI Connection"
 
           - script: |
-              echo "=== Step 2: Initialize Terraform Backend ==="
+              echo "=== Step 2: Bootstrap & Ensure Remote State Backend Exists ==="
+              STATE_RG="infrareaper-state-rg"
+              STATE_SA="infrartfidjnc4"
+              STATE_CONTAINER="tfstate"
+              LOCATION="centralindia"
+
+              # 1. Ensure State Resource Group
+              if ! az group show --name "$STATE_RG" &>/dev/null; then
+                echo "Creating State Resource Group '$STATE_RG' in $LOCATION..."
+                az group create --name "$STATE_RG" --location "$LOCATION" --tags Project=InfraReaper Component=Terraform-Backend --output none
+              else
+                echo "State Resource Group '$STATE_RG' already exists."
+              fi
+
+              # 2. Check or create storage account
+              ACTUAL_SA=""
+              if az storage account show --name "$STATE_SA" --resource-group "$STATE_RG" &>/dev/null; then
+                echo "Storage account '$STATE_SA' exists in '$STATE_RG'."
+                ACTUAL_SA="$STATE_SA"
+              else
+                NAME_AVAIL=$(az storage account check-name --name "$STATE_SA" --query nameAvailable -o tsv 2>/dev/null || echo "false")
+                if [ "$NAME_AVAIL" = "true" ]; then
+                  echo "Creating Storage Account '$STATE_SA' in '$STATE_RG'..."
+                  az storage account create --name "$STATE_SA" --resource-group "$STATE_RG" --location "$LOCATION" --sku Standard_LRS --kind StorageV2 --min-tls-version TLS1_2 --allow-blob-public-access false --output none
+                  ACTUAL_SA="$STATE_SA"
+                else
+                  echo "Storage account name '$STATE_SA' not available. Searching for existing accounts in '$STATE_RG'..."
+                  EXISTING_SA=$(az storage account list --resource-group "$STATE_RG" --query "[0].name" -o tsv)
+                  if [ -n "$EXISTING_SA" ]; then
+                    ACTUAL_SA="$EXISTING_SA"
+                    echo "Reusing existing Storage Account '$ACTUAL_SA' in '$STATE_RG'."
+                  else
+                    RAND_SUFFIX=$(head /dev/urandom | tr -dc 'a-z0-9' | head -c 6)
+                    ACTUAL_SA="infrartf${RAND_SUFFIX}"
+                    echo "Creating new Storage Account '$ACTUAL_SA' in '$STATE_RG'..."
+                    az storage account create --name "$ACTUAL_SA" --resource-group "$STATE_RG" --location "$LOCATION" --sku Standard_LRS --kind StorageV2 --min-tls-version TLS1_2 --allow-blob-public-access false --output none
+                  fi
+                fi
+              fi
+
+              # 3. Ensure blob versioning
+              az storage account blob-service-properties update --account-name "$ACTUAL_SA" --resource-group "$STATE_RG" --enable-versioning true --output none 2>/dev/null || true
+
+              # 4. Ensure blob container
+              echo "Ensuring Blob Container '$STATE_CONTAINER' in '$ACTUAL_SA'..."
+              az storage container create --name "$STATE_CONTAINER" --account-name "$ACTUAL_SA" --auth-mode login --output none 2>/dev/null || true
+
+              echo "##vso[task.setvariable variable=TERRAFORM_STORAGE_ACCOUNT]$ACTUAL_SA"
+              echo "Remote State Backend ready: RG=$STATE_RG, StorageAccount=$ACTUAL_SA, Container=$STATE_CONTAINER"
+            displayName: "Ensure Terraform Remote State Backend"
+
+          - script: |
+              echo "=== Step 3: Initialize Terraform Backend ==="
               cd ${{ parameters.terraformDir }}
-              terraform init -input=false
+              SA_NAME="$(TERRAFORM_STORAGE_ACCOUNT)"
+              if [ -z "$SA_NAME" ]; then
+                SA_NAME="infrartfidjnc4"
+              fi
+              echo "Initializing Terraform using Storage Account: $SA_NAME..."
+              terraform init -input=false -backend-config="storage_account_name=${SA_NAME}" -reconfigure
             workingDirectory: ${{ parameters.workingDirectory }}
             displayName: "Terraform Init"
 
           - script: |
-              echo "=== Step 3: Terraform Plan ==="
+              echo "=== Step 4: Terraform Plan ==="
               cd ${{ parameters.terraformDir }}
               terraform plan -out=tfplan -input=false
             workingDirectory: ${{ parameters.workingDirectory }}
             displayName: "Terraform Plan"
 
           - script: |
-              echo "=== Step 4: Terraform Apply ==="
+              echo "=== Step 5: Terraform Apply ==="
               cd ${{ parameters.terraformDir }}
               terraform apply -input=false -auto-approve tfplan
             condition: and(succeeded(), eq('${{ parameters.autoApprove }}', 'true'))
@@ -64,9 +122,8 @@ stages:
             displayName: "Terraform Apply"
 
           - script: |
-              echo "=== Step 5: Verify Deployed Infrastructure Outputs ==="
+              echo "=== Step 6: Verify Deployed Infrastructure Outputs ==="
               cd ${{ parameters.terraformDir }}
               terraform output
             workingDirectory: ${{ parameters.workingDirectory }}
             displayName: "Terraform Outputs Verification"
-
