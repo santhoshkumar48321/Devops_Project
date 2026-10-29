@@ -35,8 +35,8 @@ stages:
         displayName: "Deploy K8s Overlays"
         pool:
           name: Default
-        demands:
-          - Agent.Name -equals infrareaper-lab-agent
+          demands:
+            - Agent.Name -equals infrareaper-lab-agent
         steps:
           - checkout: self
             fetchDepth: 1
