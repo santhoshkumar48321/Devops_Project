@@ -138,9 +138,9 @@ LIFECYCLE_JSON="${TEST_TMP_DIR}/lifecycle-report.json"
 EXPIRED_CNT=$(jq '.summary.expired_actionable' "${LIFECYCLE_JSON}")
 ACTIONABLE_CNT=$(jq '.summary.actionable_for_cleanup' "${LIFECYCLE_JSON}")
 
-assert_equals "1" "${EXPIRED_CNT}" "Expired storage account flagged as EXPIRED_ACTIONABLE"
-# 1 expired storage account + 1 orphan disk = 2 actionable for cleanup
-assert_equals "2" "${ACTIONABLE_CNT}" "Total actionable resources identified for cleanup (expired + orphan)"
+assert_equals "2" "${EXPIRED_CNT}" "Expired storage account and untagged quarantined VM flagged as EXPIRED_ACTIONABLE"
+# 1 expired storage account + 1 untagged VM + 1 orphan disk = 3 actionable for cleanup
+assert_equals "3" "${ACTIONABLE_CNT}" "Total actionable resources identified for cleanup (expired + untagged + orphan)"
 
 # ------------------------------------------------------------
 # TEST 3: Cleanup Safety Whitelist Verification
@@ -155,7 +155,7 @@ AUDIT_JSON="${TEST_TMP_DIR}/cleanup-audit.json"
 SIMULATED_DELETES=$(jq '.audit_metadata.dry_run_simulated_count' "${AUDIT_JSON}")
 FAILED_CLEANUPS=$(jq '.audit_metadata.failed_count' "${AUDIT_JSON}")
 
-assert_equals "2" "${SIMULATED_DELETES}" "Dry run simulated deletion for actionable items without mutating Azure"
+assert_equals "3" "${SIMULATED_DELETES}" "Dry run simulated deletion for actionable items without mutating Azure"
 assert_equals "0" "${FAILED_CLEANUPS}" "No unhandled cleanup errors during execution"
 
 # ------------------------------------------------------------
@@ -185,4 +185,3 @@ else
     echo "============================================================"
     exit 1
 fi
-

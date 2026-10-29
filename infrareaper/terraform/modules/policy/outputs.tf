@@ -11,3 +11,4 @@ output "policy_assignment_id" {
   description = "The ID of the policy assignment."
   value       = azurerm_resource_group_policy_assignment.tag_governance.id
 }
+

@@ -86,3 +86,4 @@ resource "azurerm_resource_group_policy_assignment" "tag_governance" {
     }
   })
 }
+
