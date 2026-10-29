@@ -41,7 +41,7 @@ stages:
               echo "=== Step 1: ACR Authentication ==="
               TARGET_ACR="${{ parameters.acrName }}"
               if ! az acr show --name "$TARGET_ACR" &>/dev/null; then
-                DISCOVERED_ACR=$(az acr list --resource-group infrareaper-core-rg --query "[0].name" -o tsv 2>/dev/null || true)
+                DISCOVERED_ACR=$(az acr list --resource-group infrareaper-core-rg --query "[0].name" -o tsv 2>/dev/null || az acr list --query "[0].name" -o tsv 2>/dev/null || true)
                 if [ -n "$DISCOVERED_ACR" ]; then
                   echo "Discovered active ACR from infrastructure: $DISCOVERED_ACR"
                   TARGET_ACR="$DISCOVERED_ACR"

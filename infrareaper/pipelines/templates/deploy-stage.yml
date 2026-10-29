@@ -48,12 +48,49 @@ stages:
                 --name "${{ parameters.aksClusterName }}" \
                 --overwrite-existing
               kubectl get nodes
-            displayName: "Connect kubectl to AKS"
+
+              # Ensure ACR is attached to AKS for native image pulling
+              ACTUAL_ACR=$(az acr list --resource-group "${{ parameters.aksResourceGroup }}" --query "[0].name" -o tsv 2>/dev/null || az acr list --query "[0].name" -o tsv 2>/dev/null || true)
+              if [ -n "$ACTUAL_ACR" ]; then
+                echo "Checking if AKS cluster '${{ parameters.aksClusterName }}' has AcrPull on ACR '$ACTUAL_ACR'..."
+                KUBELET_ID=$(az aks show -g "${{ parameters.aksResourceGroup }}" -n "${{ parameters.aksClusterName }}" --query "identityProfile.kubeletidentity.objectId" -o tsv 2>/dev/null || true)
+                ACR_ID=$(az acr show --name "$ACTUAL_ACR" --query id -o tsv 2>/dev/null || true)
+                HAS_ROLE=""
+                if [ -n "$KUBELET_ID" ] && [ -n "$ACR_ID" ]; then
+                  HAS_ROLE=$(az role assignment list --assignee "$KUBELET_ID" --scope "$ACR_ID" --query "[?roleDefinitionName=='AcrPull'].id" -o tsv 2>/dev/null || true)
+                fi
+                if [ -z "$HAS_ROLE" ]; then
+                  echo "Attaching ACR '$ACTUAL_ACR' to AKS cluster '${{ parameters.aksClusterName }}'..."
+                  az aks update \
+                    --resource-group "${{ parameters.aksResourceGroup }}" \
+                    --name "${{ parameters.aksClusterName }}" \
+                    --attach-acr "$ACTUAL_ACR" \
+                    --output none 2>/dev/null || true
+                else
+                  echo "AcrPull role already verified on ACR '$ACTUAL_ACR'."
+                fi
+              fi
+            displayName: "Connect kubectl to AKS & Verify ACR Attachment"
 
           - script: |
               echo "=== Step 2: Ensure Namespace & Apply Kustomize Overlay (${{ parameters.overlay }}) ==="
+              # Discover actual ACR and Login Server
+              ACTUAL_ACR=$(az acr list --resource-group "${{ parameters.aksResourceGroup }}" --query "[0].name" -o tsv 2>/dev/null || az acr list --query "[0].name" -o tsv 2>/dev/null || true)
+              LOGIN_SERVER=$(az acr show --name "$ACTUAL_ACR" --query loginServer -o tsv 2>/dev/null || true)
+
+              if [ -n "$LOGIN_SERVER" ]; then
+                echo "Updating K8s manifests with active ACR login server: $LOGIN_SERVER..."
+                sed -i -E "s|[a-zA-Z0-9]+\.azurecr\.io/infrareaper-scanner|${LOGIN_SERVER}/infrareaper-scanner|g" kubernetes/base/cronjob.yaml
+                sed -i -E "s|[a-zA-Z0-9]+\.azurecr\.io/infrareaper-scanner|${LOGIN_SERVER}/infrareaper-scanner|g" "kubernetes/overlays/${{ parameters.overlay }}/kustomization.yaml"
+              fi
+
               kubectl create namespace "${{ parameters.kubeNamespace }}" --dry-run=client -o yaml | kubectl apply -f -
               kubectl apply -k "kubernetes/overlays/${{ parameters.overlay }}/"
+
+              if [ -n "$LOGIN_SERVER" ]; then
+                echo "Setting CronJob image to ${LOGIN_SERVER}/infrareaper-scanner:dev..."
+                kubectl set image cronjob/infrareaper-scanner "scanner=${LOGIN_SERVER}/infrareaper-scanner:dev" -n "${{ parameters.kubeNamespace }}"
+              fi
             workingDirectory: ${{ parameters.workingDirectory }}
             displayName: "Apply Kustomize Overlay"
 
@@ -61,7 +98,7 @@ stages:
               echo "=== Step 3: Synchronize Secrets from Key Vault ==="
               VAULT_NAME="${{ parameters.keyVaultName }}"
               if ! az keyvault show --name "$VAULT_NAME" &>/dev/null; then
-                DISCOVERED_KV=$(az keyvault list --resource-group "${{ parameters.aksResourceGroup }}" --query "[0].name" -o tsv 2>/dev/null || true)
+                DISCOVERED_KV=$(az keyvault list --resource-group "${{ parameters.aksResourceGroup }}" --query "[0].name" -o tsv 2>/dev/null || az keyvault list --query "[0].name" -o tsv 2>/dev/null || true)
                 if [ -n "$DISCOVERED_KV" ]; then
                   echo "Discovered active Key Vault: $DISCOVERED_KV"
                   VAULT_NAME="$DISCOVERED_KV"

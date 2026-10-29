@@ -66,6 +66,8 @@ stages:
                 kubectl get pods -n "${{ parameters.kubeNamespace }}" -o wide
                 kubectl describe job "${JOB_NAME}" -n "${{ parameters.kubeNamespace }}"
                 if [ -n "$POD_NAME" ]; then
+                  echo "Pod events and description for ${POD_NAME}:"
+                  kubectl describe pod "${POD_NAME}" -n "${{ parameters.kubeNamespace }}" || true
                   echo "Logs from pod ${POD_NAME}:"
                   kubectl logs -n "${{ parameters.kubeNamespace }}" "${POD_NAME}" --tail=100 || true
                 fi
