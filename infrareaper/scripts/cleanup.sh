@@ -3,8 +3,9 @@
 # InfraReaper Safe Resource Cleanup Engine (cleanup.sh)
 # ============================================================
 # Safely deallocates and purges expired resources past their grace
-# period and orphaned cloud assets, enforcing strict whitelist
-# protection and Azure resource locks.
+# period, quarantined untagged assets, and orphaned cloud components.
+# Enforces strict whitelist protection, cascading VM cleanup, and
+# Azure resource lock compliance.
 # ============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -152,20 +153,43 @@ for (( i=0; i<CANDIDATE_COUNT; i++ )); do
     if [[ -z "${ACTION_STATUS}" ]]; then
         if [[ "${DRY_RUN}" == "true" ]]; then
             log_info "[DRY RUN] Would deallocate/purge ${RES_TYPE} '${RES_NAME}' (RG: ${RES_RG})"
+            if [[ "${RES_TYPE}" == "Microsoft.Compute/virtualMachines" ]]; then
+                log_info "[DRY RUN] Would cascade-delete attached OS disk, data disks, and NICs for '${RES_NAME}'"
+            fi
             ACTION_STATUS="DRY_RUN_DELETE_SIMULATED"
-            ACTION_REASON="Resource expired past grace period or orphaned; action simulated in dry-run mode"
+            ACTION_REASON="Resource expired, quarantined untagged asset, or orphaned; action simulated in dry-run mode"
         else
             log_warn "Executing automated cleanup for ${RES_TYPE} '${RES_NAME}'..."
             EXEC_SUCCESS=true
 
-            # Step A: Graceful deallocation if Virtual Machine
+            # Step A: Pre-deletion discovery & graceful deallocation if Virtual Machine
+            ATTACHED_OS_DISK=""
+            ATTACHED_DATA_DISKS=()
+            ATTACHED_NICS=()
+            ATTACHED_PIPS=()
+
             if [[ "${RES_TYPE}" == "Microsoft.Compute/virtualMachines" ]]; then
-                log_info "Deallocating Virtual Machine '${RES_NAME}' before deletion..."
+                log_info "Deallocating Virtual Machine '${RES_NAME}' before deletion to halt compute costs..."
                 az vm deallocate --resource-group "${RES_RG}" --name "${RES_NAME}" --no-wait 2>/dev/null || true
+
+                # Discover attached disks and NICs for cascading deletion
+                VM_DETAILS=$(az vm show --resource-group "${RES_RG}" --name "${RES_NAME}" --query "{osDisk: storageProfile.osDisk.managedDisk.id, dataDisks: storageProfile.dataDisks[].managedDisk.id, nics: networkProfile.networkInterfaces[].id}" -o json 2>/dev/null || echo "{}")
+                ATTACHED_OS_DISK=$(echo "${VM_DETAILS}" | jq -r '.osDisk // empty')
+                while IFS= read -r d; do
+                    [[ -n "${d}" ]] && ATTACHED_DATA_DISKS+=("${d}")
+                done < <(echo "${VM_DETAILS}" | jq -r '.dataDisks[]? // empty')
+                while IFS= read -r n; do
+                    if [[ -n "${n}" ]]; then
+                        ATTACHED_NICS+=("${n}")
+                        PIP_ID=$(az network nic show --ids "${n}" --query "ipConfigurations[0].publicIpAddress.id" -o tsv 2>/dev/null || true)
+                        [[ -n "${PIP_ID}" ]] && ATTACHED_PIPS+=("${PIP_ID}")
+                    fi
+                done < <(echo "${VM_DETAILS}" | jq -r '.nics[]? // empty')
+
                 sleep 5
             fi
 
-            # Step B: Resource deletion
+            # Step B: Resource deletion with cascading cleanup
             DEL_ERR=""
             if [[ "${RES_TYPE}" == "Microsoft.Storage/storageAccounts" ]]; then
                 DEL_ERR=$(az storage account delete --name "${RES_NAME}" --resource-group "${RES_RG}" --yes 2>&1) || EXEC_SUCCESS=false
@@ -175,6 +199,29 @@ for (( i=0; i<CANDIDATE_COUNT; i++ )); do
                 DEL_ERR=$(az disk delete --name "${RES_NAME}" --resource-group "${RES_RG}" --yes --no-wait 2>&1) || EXEC_SUCCESS=false
             elif [[ "${RES_TYPE}" == "Microsoft.Compute/virtualMachines" ]]; then
                 DEL_ERR=$(az vm delete --name "${RES_NAME}" --resource-group "${RES_RG}" --yes 2>&1) || EXEC_SUCCESS=false
+
+                if [[ "${EXEC_SUCCESS}" == "true" ]]; then
+                    # Cascade delete OS Disk
+                    if [[ -n "${ATTACHED_OS_DISK}" ]]; then
+                        log_info "Cascade deleting attached OS Disk for '${RES_NAME}'..."
+                        az disk delete --ids "${ATTACHED_OS_DISK}" --yes --no-wait 2>/dev/null || true
+                    fi
+                    # Cascade delete Data Disks
+                    for ddisk in "${ATTACHED_DATA_DISKS[@]}"; do
+                        log_info "Cascade deleting attached Data Disk: ${ddisk}..."
+                        az disk delete --ids "${ddisk}" --yes --no-wait 2>/dev/null || true
+                    done
+                    # Cascade delete NICs
+                    for nic_id in "${ATTACHED_NICS[@]}"; do
+                        log_info "Cascade deleting attached Network Interface: ${nic_id}..."
+                        az network nic delete --ids "${nic_id}" 2>/dev/null || true
+                    done
+                    # Cascade delete Public IPs
+                    for pip_id in "${ATTACHED_PIPS[@]}"; do
+                        log_info "Cascade deleting attached Public IP: ${pip_id}..."
+                        az network public-ip delete --ids "${pip_id}" 2>/dev/null || true
+                    done
+                fi
             elif [[ "${RES_TYPE}" == "Microsoft.Network/networkInterfaces" ]]; then
                 DEL_ERR=$(az network nic delete --name "${RES_NAME}" --resource-group "${RES_RG}" 2>&1) || EXEC_SUCCESS=false
             elif [[ "${RES_TYPE}" == "Microsoft.Network/networkSecurityGroups" ]]; then
@@ -186,7 +233,7 @@ for (( i=0; i<CANDIDATE_COUNT; i++ )); do
             if [[ "${EXEC_SUCCESS}" == "true" ]]; then
                 log_success "Successfully deleted resource '${RES_NAME}'."
                 ACTION_STATUS="DELETED"
-                ACTION_REASON="Expired or orphaned resource successfully deleted"
+                ACTION_REASON="Expired, quarantined untagged asset, or orphaned resource successfully deleted"
             else
                 log_error "Failed to delete resource '${RES_NAME}'."
                 if [[ -n "${DEL_ERR}" ]]; then
