@@ -9,15 +9,16 @@ version: "1.0"
 policy_name: "azure-resource-lifecycle-governance"
 
 lifecycle:
-  # Default TTL in days if resource lacks an explicit expiry-date tag (for compliant resources)
+  # Default TTL in days if resource lacks an explicit expiry-date tag
   default_ttl_days: 30
-
-  # Untagged quarantine policy: TTL in days for completely untagged or non-compliant resources in non-prod
-  # 0 = immediate quarantine & deallocation/purge
-  untagged_quarantine_ttl_days: 0
 
   # Grace period in hours after expiration before automated cleanup triggers
   grace_period_hours: 48
+
+  # Quarantine period for untagged / non-compliant resources (hours)
+  # In sandbox/dev environments, untagged resources are granted this maximum duration
+  # before being automatically purged (0 = immediate deallocation and cleanup)
+  untagged_quarantine_hours: 0
 
   # Notification thresholds for resources approaching expiry
   warning_thresholds:
@@ -34,9 +35,6 @@ cleanup:
 
   # Timeout waiting for VM graceful deallocation before proceeding (seconds)
   deallocation_timeout_seconds: 300
-
-  # Cascading cleanup: automatically purge attached OS disk, data disks, and NICs when deleting VMs
-  cascade_delete_vm_disks_nics: true
 
   # Automatically purge unattached managed disks older than days
   unattached_disk_ttl_days: 7

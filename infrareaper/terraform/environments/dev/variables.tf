@@ -50,3 +50,8 @@ variable "alert_emails" {
   default     = ["santhoshkumar48321@gmail.com"]
 }
 
+variable "tag_policy_effect" {
+  description = "Effect of Azure Policy for mandatory tags (Audit, Deny, Disabled)."
+  type        = string
+  default     = "Audit"
+}

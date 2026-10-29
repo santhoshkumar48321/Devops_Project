@@ -3,6 +3,7 @@
 # ============================================================
 # Assembles all InfraReaper infrastructure modules for dev:
 # Core RG + Networking + ACR + Key Vault + AKS + Budget + Test RG
+# + Azure Tag Policy Shift-Left Guardrail
 # ============================================================
 
 terraform {
@@ -141,3 +142,12 @@ module "monitoring_infra" {
   environment         = var.environment
 }
 
+# ──────────────────────────────────────────────
+# 10. Tag Governance Policy (Shift-Left Guardrail)
+# ──────────────────────────────────────────────
+module "tag_policy" {
+  source            = "../../modules/policy"
+  resource_group_id = module.test_resources.resource_group_id
+  policy_effect     = var.tag_policy_effect
+  environment       = var.environment
+}
