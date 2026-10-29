@@ -4,6 +4,8 @@
 # Provisions a realistic sandbox environment with intentionally
 # compliant, non-compliant, expired, and orphaned resources
 # for InfraReaper to scan, detect, and clean up safely.
+# When var.enable_test_vms is false, only the resource group
+# and VNet are created for manual developer testing.
 # ============================================================
 
 terraform {
@@ -41,6 +43,12 @@ resource "azurerm_virtual_network" "test_vnet" {
   resource_group_name = azurerm_resource_group.test_rg.name
   location            = azurerm_resource_group.test_rg.location
   address_space       = ["10.1.0.0/16"]
+
+  tags = {
+    owner       = "santhosh"
+    environment = "dev"
+    expiry-date = "2026-12-01"
+  }
 }
 
 resource "azurerm_subnet" "test_subnet" {
@@ -63,6 +71,12 @@ resource "azurerm_network_interface" "tagged_nic" {
     name                          = "internal"
     subnet_id                     = azurerm_subnet.test_subnet.id
     private_ip_address_allocation = "Dynamic"
+  }
+
+  tags = {
+    owner       = "santhosh"
+    environment = "dev"
+    expiry-date = "2026-12-01"
   }
 }
 
@@ -111,6 +125,8 @@ resource "azurerm_network_interface" "untagged_nic" {
     subnet_id                     = azurerm_subnet.test_subnet.id
     private_ip_address_allocation = "Dynamic"
   }
+
+  tags = {}
 }
 
 resource "azurerm_linux_virtual_machine" "untagged_vm" {
@@ -144,6 +160,7 @@ resource "azurerm_linux_virtual_machine" "untagged_vm" {
 # 5. Target 3: Expired Storage Account (Cleanup target)
 # ──────────────────────────────────────────────
 resource "random_string" "storage_suffix" {
+  count   = var.enable_test_vms ? 1 : 0
   length  = 6
   special = false
   upper   = false
@@ -151,7 +168,8 @@ resource "random_string" "storage_suffix" {
 }
 
 resource "azurerm_storage_account" "expired_sa" {
-  name                     = "testexpired${random_string.storage_suffix.result}"
+  count                    = var.enable_test_vms ? 1 : 0
+  name                     = "testexpired${random_string.storage_suffix[0].result}"
   resource_group_name      = azurerm_resource_group.test_rg.name
   location                 = azurerm_resource_group.test_rg.location
   account_tier             = "Standard"
@@ -170,6 +188,7 @@ resource "azurerm_storage_account" "expired_sa" {
 # 6. Target 4: Orphaned Public IP (Unused / No NIC)
 # ──────────────────────────────────────────────
 resource "azurerm_public_ip" "orphan_ip" {
+  count               = var.enable_test_vms ? 1 : 0
   name                = "test-orphan-ip"
   resource_group_name = azurerm_resource_group.test_rg.name
   location            = azurerm_resource_group.test_rg.location
@@ -184,6 +203,7 @@ resource "azurerm_public_ip" "orphan_ip" {
 # 7. Target 5: Unattached Managed Disk
 # ──────────────────────────────────────────────
 resource "azurerm_managed_disk" "unattached_disk" {
+  count                = var.enable_test_vms ? 1 : 0
   name                 = "test-unattached-disk"
   location             = azurerm_resource_group.test_rg.location
   resource_group_name  = azurerm_resource_group.test_rg.name
@@ -194,4 +214,3 @@ resource "azurerm_managed_disk" "unattached_disk" {
   # No tags and unattached to any VM
   tags = {}
 }
-

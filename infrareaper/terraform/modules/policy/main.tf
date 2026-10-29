@@ -49,18 +49,29 @@ resource "azurerm_policy_definition" "require_mandatory_tags" {
 
   policy_rule = jsonencode({
     if = {
-      anyOf = [
+      allOf = [
         {
-          field  = "tags['owner']"
-          exists = "false"
+          field = "type"
+          in    = [
+            "Microsoft.Compute/virtualMachines",
+            "Microsoft.Storage/storageAccounts"
+          ]
         },
         {
-          field  = "tags['environment']"
-          exists = "false"
-        },
-        {
-          field  = "tags['expiry-date']"
-          exists = "false"
+          anyOf = [
+            {
+              field  = "tags['owner']"
+              exists = "false"
+            },
+            {
+              field  = "tags['environment']"
+              exists = "false"
+            },
+            {
+              field  = "tags['expiry-date']"
+              exists = "false"
+            }
+          ]
         }
       ]
     }

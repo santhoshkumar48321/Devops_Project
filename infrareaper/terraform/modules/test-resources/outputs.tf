@@ -24,16 +24,15 @@ output "untagged_vm_name" {
 
 output "expired_storage_account_name" {
   description = "Name of the expired test storage account (cleanup target)."
-  value       = azurerm_storage_account.expired_sa.name
+  value       = length(azurerm_storage_account.expired_sa) > 0 ? azurerm_storage_account.expired_sa[0].name : null
 }
 
 output "orphan_public_ip_name" {
   description = "Name of the orphaned public IP."
-  value       = azurerm_public_ip.orphan_ip.name
+  value       = length(azurerm_public_ip.orphan_ip) > 0 ? azurerm_public_ip.orphan_ip[0].name : null
 }
 
 output "unattached_disk_name" {
   description = "Name of the unattached test managed disk."
-  value       = azurerm_managed_disk.unattached_disk.name
+  value       = length(azurerm_managed_disk.unattached_disk) > 0 ? azurerm_managed_disk.unattached_disk[0].name : null
 }
-
