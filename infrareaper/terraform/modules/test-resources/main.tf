@@ -1,11 +1,9 @@
 # ============================================================
 # Module: test-resources — Main
 # ============================================================
-# Provisions a realistic sandbox environment with intentionally
-# compliant, non-compliant, expired, and orphaned resources
-# for InfraReaper to scan, detect, and clean up safely.
-# When var.enable_test_vms is false, only the resource group
-# and VNet are created for manual developer testing.
+# Provisions an isolated test resource group for InfraReaper.
+# When var.enable_test_vms is false, ONLY the resource group is
+# created (leaving it 100% empty for manual developer testing).
 # ============================================================
 
 terraform {
@@ -36,9 +34,10 @@ resource "azurerm_resource_group" "test_rg" {
 }
 
 # ──────────────────────────────────────────────
-# 2. Test VNet & Subnet for Test VMs
+# 2. Test VNet & Subnet for Test VMs (Optional)
 # ──────────────────────────────────────────────
 resource "azurerm_virtual_network" "test_vnet" {
+  count               = var.enable_test_vms ? 1 : 0
   name                = "test-sandbox-vnet"
   resource_group_name = azurerm_resource_group.test_rg.name
   location            = azurerm_resource_group.test_rg.location
@@ -52,9 +51,10 @@ resource "azurerm_virtual_network" "test_vnet" {
 }
 
 resource "azurerm_subnet" "test_subnet" {
+  count                = var.enable_test_vms ? 1 : 0
   name                 = "test-sandbox-subnet"
   resource_group_name  = azurerm_resource_group.test_rg.name
-  virtual_network_name = azurerm_virtual_network.test_vnet.name
+  virtual_network_name = azurerm_virtual_network.test_vnet[0].name
   address_prefixes     = ["10.1.1.0/24"]
 }
 
@@ -69,7 +69,7 @@ resource "azurerm_network_interface" "tagged_nic" {
 
   ip_configuration {
     name                          = "internal"
-    subnet_id                     = azurerm_subnet.test_subnet.id
+    subnet_id                     = azurerm_subnet.test_subnet[0].id
     private_ip_address_allocation = "Dynamic"
   }
 
@@ -122,7 +122,7 @@ resource "azurerm_network_interface" "untagged_nic" {
 
   ip_configuration {
     name                          = "internal"
-    subnet_id                     = azurerm_subnet.test_subnet.id
+    subnet_id                     = azurerm_subnet.test_subnet[0].id
     private_ip_address_allocation = "Dynamic"
   }
 

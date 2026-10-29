@@ -17,6 +17,7 @@ override.tf.json
 *_override.tf.json
 *.tfvars
 !example.tfvars
+!terraform/environments/dev/terraform.tfvars
 
 # ----- Ansible -----
 # Vault passwords and retry files

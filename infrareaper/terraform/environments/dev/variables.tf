@@ -29,7 +29,7 @@ variable "environment" {
 variable "enable_test_vms" {
   description = "Deploy test VMs in the test sandbox."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "budget_amount" {
@@ -53,5 +53,5 @@ variable "alert_emails" {
 variable "tag_policy_effect" {
   description = "Effect of Azure Policy for mandatory tags (Audit, Deny, Disabled)."
   type        = string
-  default     = "Audit"
+  default     = "Deny"
 }
