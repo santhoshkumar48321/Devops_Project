@@ -1,0 +1,71 @@
+# ============================================================
+# Stage Template: Terraform Infrastructure Provisioning
+# ============================================================
+# Provisions and ensures all Azure cloud infrastructure (RG,
+# VNet, AKS, ACR, Key Vault, Role Assignments, Test Sandbox)
+# using Terraform with remote Azure Blob Storage backend.
+# ============================================================
+
+parameters:
+  - name: workingDirectory
+    type: string
+    default: "$(Build.SourcesDirectory)/infrareaper"
+  - name: terraformDir
+    type: string
+    default: "terraform/environments/dev"
+  - name: environment
+    type: string
+    default: "dev"
+  - name: autoApprove
+    type: boolean
+    default: true
+
+stages:
+  - stage: Provision_Infrastructure
+    displayName: "Terraform Infrastructure Provisioning"
+    dependsOn: Security_Scan
+    condition: and(succeeded(), or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), eq(variables['Build.Reason'], 'Manual'), contains(variables['Build.SourceBranch'], 'phase')))
+    jobs:
+      - job: Terraform_Plan_and_Apply
+        displayName: "Terraform Plan & Apply (${{ parameters.environment }})"
+        pool:
+          name: Default
+        demands:
+          - Agent.Name -equals infrareaper-lab-agent
+        steps:
+          - checkout: self
+            fetchDepth: 1
+
+          - script: |
+              echo "=== Step 1: Verify Azure Authentication ==="
+              az account show --output table
+            displayName: "Verify Azure CLI Connection"
+
+          - script: |
+              echo "=== Step 2: Initialize Terraform Backend ==="
+              cd ${{ parameters.terraformDir }}
+              terraform init -input=false
+            workingDirectory: ${{ parameters.workingDirectory }}
+            displayName: "Terraform Init"
+
+          - script: |
+              echo "=== Step 3: Terraform Plan ==="
+              cd ${{ parameters.terraformDir }}
+              terraform plan -out=tfplan -input=false
+            workingDirectory: ${{ parameters.workingDirectory }}
+            displayName: "Terraform Plan"
+
+          - script: |
+              echo "=== Step 4: Terraform Apply ==="
+              cd ${{ parameters.terraformDir }}
+              terraform apply -input=false -auto-approve tfplan
+            condition: and(succeeded(), ${{ parameters.autoApprove }})
+            workingDirectory: ${{ parameters.workingDirectory }}
+            displayName: "Terraform Apply"
+
+          - script: |
+              echo "=== Step 5: Verify Deployed Infrastructure Outputs ==="
+              cd ${{ parameters.terraformDir }}
+              terraform output
+            workingDirectory: ${{ parameters.workingDirectory }}
+            displayName: "Terraform Outputs Verification"

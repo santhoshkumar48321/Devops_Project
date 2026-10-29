@@ -1,8 +1,15 @@
 # ============================================================
-# InfraReaper CI/CD Multi-Stage Pipeline (Root Entrypoint)
+# InfraReaper Complete CI/CD Multi-Stage Pipeline
 # ============================================================
 # Hardened, enterprise-grade multi-stage CI/CD pipeline executing
 # on the self-hosted lab agent (infrareaper-lab-agent).
+# Workflow:
+# 1. Lint & Code Validation
+# 2. Security & IaC Scanning
+# 3. Terraform Infrastructure Provisioning (AKS, ACR, Key Vault, RGs)
+# 4. Container Build, Trivy Security Scan & ACR Push
+# 5. Deploy Overlays & Observability Stack to AKS
+# 6. Automated Smoke Test & Verification Run
 # ============================================================
 
 trigger:
@@ -12,6 +19,7 @@ trigger:
   paths:
     include:
       - infrareaper/**
+      - azure-pipelines.yml
 
 pr:
   branches:
@@ -20,6 +28,7 @@ pr:
   paths:
     include:
       - infrareaper/**
+      - azure-pipelines.yml
 
 pool:
   name: Default
@@ -43,16 +52,29 @@ variables:
     value: "infrareaper"
   - name: WORKING_DIR
     value: "$(Build.SourcesDirectory)/infrareaper"
+  - name: TERRAFORM_DIR
+    value: "terraform/environments/dev"
 
 stages:
+  # Stage 1: Static analysis, linting and unit tests
   - template: infrareaper/pipelines/templates/lint-stage.yml
     parameters:
       workingDirectory: $(WORKING_DIR)
 
+  # Stage 2: CIS benchmark, IaC security & secret leakage scan
   - template: infrareaper/pipelines/templates/security-stage.yml
     parameters:
       workingDirectory: $(WORKING_DIR)
 
+  # Stage 3: Infrastructure Provisioning using Terraform
+  - template: infrareaper/pipelines/templates/terraform-stage.yml
+    parameters:
+      workingDirectory: $(WORKING_DIR)
+      terraformDir: $(TERRAFORM_DIR)
+      environment: "dev"
+      autoApprove: true
+
+  # Stage 4: Container Build, Trivy scanning and ACR Push
   - template: infrareaper/pipelines/templates/build-stage.yml
     parameters:
       workingDirectory: $(WORKING_DIR)
@@ -61,6 +83,7 @@ stages:
       imageRepository: $(IMAGE_REPOSITORY)
       imageTag: $(Build.BuildId)
 
+  # Stage 5: Deploy K8s manifests, sync Key Vault secrets, deploy Prometheus/Grafana
   - template: infrareaper/pipelines/templates/deploy-stage.yml
     parameters:
       workingDirectory: $(WORKING_DIR)
@@ -70,10 +93,10 @@ stages:
       kubeNamespace: $(KUBE_NAMESPACE)
       overlay: "dev"
 
+  # Stage 6: Automated Smoke Test validation on AKS
   - template: infrareaper/pipelines/templates/smoke-test-stage.yml
     parameters:
       aksClusterName: $(AKS_CLUSTER_NAME)
       aksResourceGroup: $(AKS_RESOURCE_GROUP)
       kubeNamespace: $(KUBE_NAMESPACE)
       timeoutSeconds: 240
-

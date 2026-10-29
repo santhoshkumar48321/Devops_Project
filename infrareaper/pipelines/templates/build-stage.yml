@@ -25,14 +25,14 @@ parameters:
 stages:
   - stage: Build_and_Scan_Image
     displayName: "Container Build & Security Scan"
-    dependsOn: Security_Scan
+    dependsOn: Provision_Infrastructure
     jobs:
       - job: Docker_Build_Scan_Push
         displayName: "Build, Scan & ACR Push"
         pool:
           name: Default
-          demands:
-            - Agent.Name -equals infrareaper-lab-agent
+        demands:
+          - Agent.Name -equals infrareaper-lab-agent
         steps:
           - checkout: self
             fetchDepth: 1
@@ -47,7 +47,8 @@ stages:
               echo "=== Step 2: Build Docker Image ==="
               IMAGE_BUILD="${{ parameters.acrLoginServer }}/${{ parameters.imageRepository }}:${{ parameters.imageTag }}"
               IMAGE_DEV="${{ parameters.acrLoginServer }}/${{ parameters.imageRepository }}:dev"
-              docker build -t "$IMAGE_BUILD" -t "$IMAGE_DEV" -f docker/Dockerfile .
+              IMAGE_V11="${{ parameters.acrLoginServer }}/${{ parameters.imageRepository }}:v1.1.0"
+              docker build -t "$IMAGE_BUILD" -t "$IMAGE_DEV" -t "$IMAGE_V11" -f docker/Dockerfile .
             workingDirectory: ${{ parameters.workingDirectory }}
             displayName: "Build Docker Image"
 
@@ -62,9 +63,10 @@ stages:
               echo "=== Step 4: Push Image to Azure Container Registry ==="
               IMAGE_BUILD="${{ parameters.acrLoginServer }}/${{ parameters.imageRepository }}:${{ parameters.imageTag }}"
               IMAGE_DEV="${{ parameters.acrLoginServer }}/${{ parameters.imageRepository }}:dev"
+              IMAGE_V11="${{ parameters.acrLoginServer }}/${{ parameters.imageRepository }}:v1.1.0"
               docker push "$IMAGE_BUILD"
               docker push "$IMAGE_DEV"
-            condition: and(succeeded(), or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), eq(variables['Build.Reason'], 'Manual'), contains(variables['Build.SourceBranch'], 'phase9')))
+              docker push "$IMAGE_V11"
+            condition: and(succeeded(), or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), eq(variables['Build.Reason'], 'Manual'), contains(variables['Build.SourceBranch'], 'phase')))
             workingDirectory: ${{ parameters.workingDirectory }}
             displayName: "Push Images to ACR"
-

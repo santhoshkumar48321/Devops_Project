@@ -23,7 +23,7 @@ stages:
   - stage: Smoke_Test
     displayName: "Automated Smoke Test on AKS"
     dependsOn: Deploy_AKS
-    condition: and(succeeded(), or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), eq(variables['Build.Reason'], 'Manual'), contains(variables['Build.SourceBranch'], 'phase9')))
+    condition: and(succeeded(), or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), eq(variables['Build.Reason'], 'Manual'), contains(variables['Build.SourceBranch'], 'phase')))
     jobs:
       - job: Smoke_Test_Execution
         displayName: "Execute & Validate AKS Job"
