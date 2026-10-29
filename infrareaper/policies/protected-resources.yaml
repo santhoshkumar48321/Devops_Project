@@ -19,6 +19,7 @@ protected_resource_types:
   - "Microsoft.ContainerRegistry/registries"
   - "Microsoft.KeyVault/vaults"
   - "Microsoft.OperationalInsights/workspaces"
+  - "Microsoft.Network/virtualNetworks"  # Platform networking backbone is strictly preserved
   - "Microsoft.Storage/storageAccounts" # Guarded at core, only test RG storage can be touched
 
 protected_tags:

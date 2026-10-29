@@ -109,6 +109,7 @@ for (( i=0; i<CANDIDATE_COUNT; i++ )); do
             "Microsoft.ContainerRegistry/registries"
             "Microsoft.KeyVault/vaults"
             "Microsoft.OperationalInsights/workspaces"
+            "Microsoft.Network/virtualNetworks"
         )
         for ptype in "${PROTECTED_TYPES[@]}"; do
             if [[ "${RES_TYPE}" == "${ptype}" ]]; then

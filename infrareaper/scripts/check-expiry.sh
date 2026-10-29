@@ -110,6 +110,20 @@ for (( i=0; i<RESOURCE_COUNT; i++ )); do
         ACTIONABLE_FOR_CLEANUP=true
     fi
 
+    # Safety Barrier: Virtual Networks must never be marked for cleanup
+    RES_TYPE=$(echo "${RES_JSON}" | jq -r '.type')
+    if [[ "${RES_TYPE}" == "Microsoft.Network/virtualNetworks" ]]; then
+        ACTIONABLE_FOR_CLEANUP=false
+        LIFECYCLE_STATE="ACTIVE"
+    fi
+
+    # Safety Barrier: NICs and Disks attached to active VMs must not be deleted standalone
+    # (they are cleaned up via cascading VM deletion or when orphaned)
+    if [[ ( "${RES_TYPE}" == "Microsoft.Network/networkInterfaces" || "${RES_TYPE}" == "Microsoft.Compute/disks" ) && "${IS_ORPHAN}" == "false" ]]; then
+        ACTIONABLE_FOR_CLEANUP=false
+        LIFECYCLE_STATE="ACTIVE"
+    fi
+
     # Append augmented resource record
     UPDATED_RES=$(echo "${RES_JSON}" | jq \
         --arg state "${LIFECYCLE_STATE}" \
