@@ -11,13 +11,20 @@ data:
   alertmanager.yml: |
     global:
       resolve_timeout: 5m
+      slack_api_url: "SLACK_WEBHOOK_URL_PLACEHOLDER"
 
     route:
       group_by: ["alertname", "severity"]
       group_wait: 30s
       group_interval: 5m
       repeat_interval: 4h
-      receiver: "default-receiver"
+      receiver: "slack-notifications"
 
     receivers:
-      - name: "default-receiver"
+      - name: "slack-notifications"
+        slack_configs:
+          - channel: "#general"
+            send_resolved: true
+            icon_emoji: ":shield:"
+            title: "{{ range .Alerts }}[{{ .Status | toUpper }}] {{ .Annotations.summary }}{{ end }}"
+            text: "{{ range .Alerts }}*Alert:* `{{ .Labels.alertname }}` (Severity: `{{ .Labels.severity }}`)\n*Details:* {{ .Annotations.description }}\n{{ end }}"

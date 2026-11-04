@@ -111,6 +111,7 @@ stages:
               CLEANUP_CLIENT_ID=$(az keyvault secret show --vault-name "${VAULT_NAME}" --name CLEANUP-CLIENT-ID --query value -o tsv)
               CLEANUP_CLIENT_SECRET=$(az keyvault secret show --vault-name "${VAULT_NAME}" --name CLEANUP-CLIENT-SECRET --query value -o tsv)
               SENDGRID_KEY=$(az keyvault secret show --vault-name "${VAULT_NAME}" --name SENDGRID-API-KEY --query value -o tsv 2>/dev/null || echo "")
+              SLACK_URL=$(az keyvault secret show --vault-name "${VAULT_NAME}" --name SLACK-WEBHOOK-URL --query value -o tsv 2>/dev/null || echo "")
 
               kubectl create secret generic infrareaper-secrets -n "${{ parameters.kubeNamespace }}" \
                 --from-literal=AZURE_CLIENT_ID="${SP_CLIENT_ID}" \
@@ -120,12 +121,17 @@ stages:
                 --from-literal=CLEANUP_CLIENT_SECRET="${CLEANUP_CLIENT_SECRET}" \
                 --from-literal=CLEANUP_TENANT_ID="${SP_TENANT}" \
                 --from-literal=SENDGRID_API_KEY="${SENDGRID_KEY}" \
+                --from-literal=SLACK_WEBHOOK_URL="${SLACK_URL}" \
                 --dry-run=client -o yaml | kubectl apply -f -
               echo "Secrets injected successfully into namespace ${{ parameters.kubeNamespace }}."
             displayName: "Synchronize Secrets from Key Vault"
 
           - script: |
               echo "=== Step 4: Deploy Observability Stack (Prometheus, Grafana, Loki) ==="
+              if [ -n "${SLACK_URL}" ]; then
+                echo "Injecting Slack Webhook URL into Alertmanager configuration..."
+                sed -i -E "s|SLACK_WEBHOOK_URL_PLACEHOLDER|${SLACK_URL}|g" kubernetes/monitoring/alertmanager/alertmanager-configmap.yaml
+              fi
               kubectl apply -k "kubernetes/monitoring/"
             workingDirectory: ${{ parameters.workingDirectory }}
             displayName: "Deploy Observability Stack"

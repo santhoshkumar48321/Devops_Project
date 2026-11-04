@@ -106,6 +106,12 @@ spec:
                       name: infrareaper-secrets
                       key: SENDGRID_API_KEY
                       optional: true
+                - name: SLACK_WEBHOOK_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: infrareaper-secrets
+                      key: SLACK_WEBHOOK_URL
+                      optional: true
               volumeMounts:
                 - name: policy-volume
                   mountPath: /app/policies

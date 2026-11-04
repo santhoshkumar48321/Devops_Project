@@ -56,6 +56,15 @@ data:
               summary: "High volume of Critical Violations detected"
               description: "There are currently {{ $value }} critical policy violations requiring immediate remediation."
 
+          - alert: InfraReaperExpiringResourcesWarning
+            expr: infrareaper_expiring_resources_total > 0
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: "InfraReaper: Resources Expiring in Sandbox"
+              description: "{{ $value }} resource(s) are within their expiration window and will be purged unless extended."
+
           - alert: InfraReaperSLOBreach
             expr: (sum(rate(infrareaper_scan_success_total[1h])) / sum(rate(infrareaper_scan_total[1h]))) < 0.99
             for: 15m
