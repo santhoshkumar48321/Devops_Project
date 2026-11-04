@@ -103,6 +103,30 @@ stages:
               fi
               echo "Initializing Terraform using Storage Account: $SA_NAME..."
               terraform init -input=false -backend-config="storage_account_name=${SA_NAME}" -reconfigure
+
+              echo "Reconciling state for Azure Policy governance module..."
+              SUB_ID=$(az account show --query id -o tsv 2>/dev/null || echo "bc596dcb-9b2c-4fb7-94b6-cfba683a6a2f")
+
+              if ! terraform state list 2>/dev/null | grep -q "module.tag_policy.azurerm_policy_definition.require_mandatory_tags"; then
+                if az policy definition show --name "infrareaper-require-tags-dev" &>/dev/null; then
+                  echo "Discovered unmanaged policy definition 'infrareaper-require-tags-dev' in Azure. Importing into Terraform state..."
+                  terraform import -input=false module.tag_policy.azurerm_policy_definition.require_mandatory_tags "/subscriptions/${SUB_ID}/providers/Microsoft.Authorization/policyDefinitions/infrareaper-require-tags-dev" || {
+                    echo "Import unsuccessful; deleting unmanaged policy so Terraform can create and manage it natively..."
+                    az policy assignment delete --name "ir-tag-gov-dev" --resource-group "infrareaper-test-resources" 2>/dev/null || true
+                    az policy definition delete --name "infrareaper-require-tags-dev" 2>/dev/null || true
+                  }
+                fi
+              fi
+
+              if ! terraform state list 2>/dev/null | grep -q "module.tag_policy.azurerm_resource_group_policy_assignment.tag_governance"; then
+                if az policy assignment show --name "ir-tag-gov-dev" --resource-group "infrareaper-test-resources" &>/dev/null; then
+                  echo "Discovered unmanaged policy assignment 'ir-tag-gov-dev' in Azure. Importing into Terraform state..."
+                  terraform import -input=false module.tag_policy.azurerm_resource_group_policy_assignment.tag_governance "/subscriptions/${SUB_ID}/resourceGroups/infrareaper-test-resources/providers/Microsoft.Authorization/policyAssignments/ir-tag-gov-dev" || {
+                    echo "Import unsuccessful; deleting unmanaged assignment so Terraform can create and manage it natively..."
+                    az policy assignment delete --name "ir-tag-gov-dev" --resource-group "infrareaper-test-resources" 2>/dev/null || true
+                  }
+                fi
+              fi
             workingDirectory: ${{ parameters.workingDirectory }}
             displayName: "Terraform Init"
 
