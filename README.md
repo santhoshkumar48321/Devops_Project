@@ -10,6 +10,11 @@
 [![Security](https://img.shields.io/badge/Security-Trivy%200%20CVEs%20%7C%20CIS%20Hardened-00C7B7?logo=aqua&logoColor=white)](https://www.aquasec.com/products/trivy/)
 [![Observability](https://img.shields.io/badge/Observability-Prometheus%20%7C%20Grafana%20%7C%20Loki-F46800?logo=grafana&logoColor=white)](https://grafana.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Documentation](https://img.shields.io/badge/Documentation-End--to--End%20Master%20Spec-blue.svg)](infrareaper/docs/PROJECT_DOCUMENTATION.md)
+
+---
+
+> 📖 **Comprehensive Specification**: For in-depth architectural specifications, mathematical FinOps models, multi-pass dependency matrices, and complete SRE runbooks, refer to [**`infrareaper/docs/PROJECT_DOCUMENTATION.md`**](infrareaper/docs/PROJECT_DOCUMENTATION.md).
 
 ---
 
