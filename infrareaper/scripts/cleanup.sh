@@ -163,7 +163,29 @@ for (( i=0; i<CANDIDATE_COUNT; i++ )); do
     # Perform Execution (Dry-Run vs Real Execution)
     # --------------------------------------------------------
     if [[ -z "${ACTION_STATUS}" ]]; then
-        if [[ "${DRY_RUN}" == "true" ]]; then
+        ACTION_TYPE=$(echo "${RES}" | jq -r '.action_type // "DELETE"')
+        AVG_CPU=$(echo "${RES}" | jq -r '.avg_cpu_percent // empty')
+
+        if [[ "${ACTION_TYPE}" == "DEALLOCATE_IDLE" ]]; then
+            if [[ "${DRY_RUN}" == "true" ]]; then
+                log_info "[DRY RUN] Would auto-deallocate idle VM '${RES_NAME}' (Avg CPU: ${AVG_CPU:-0}%) to eliminate compute charges (disks preserved)"
+                ACTION_STATUS="DRY_RUN_DEALLOCATE_SIMULATED"
+                ACTION_REASON="VM idle (<2% CPU); simulated deallocation in dry-run mode"
+            else
+                log_warn "Auto-deallocating idle VM '${RES_NAME}' (Avg CPU: ${AVG_CPU:-0}%)..."
+                VM_POWER=$(az vm get-instance-view --resource-group "${RES_RG}" --name "${RES_NAME}" --query "instanceView.statuses[?starts_with(code, 'PowerState/')].code" -o tsv 2>/dev/null || echo "")
+                if [[ "${VM_POWER}" == *"deallocated"* ]]; then
+                    log_info "VM '${RES_NAME}' is already deallocated."
+                    ACTION_STATUS="ALREADY_DEALLOCATED"
+                    ACTION_REASON="VM was already stopped/deallocated"
+                else
+                    az vm deallocate --resource-group "${RES_RG}" --name "${RES_NAME}" --no-wait 2>/dev/null || true
+                    log_success "Successfully deallocated idle VM '${RES_NAME}' (disks and configuration preserved)."
+                    ACTION_STATUS="DEALLOCATED_IDLE"
+                    ACTION_REASON="VM had <2% CPU utilization; automatically deallocated to eliminate compute billing"
+                fi
+            fi
+        elif [[ "${DRY_RUN}" == "true" ]]; then
             log_info "[DRY RUN] Would deallocate/purge ${RES_TYPE} '${RES_NAME}' (RG: ${RES_RG})"
             ACTION_STATUS="DRY_RUN_DELETE_SIMULATED"
             ACTION_REASON="Resource expired past grace period or orphaned; action simulated in dry-run mode"
@@ -285,6 +307,8 @@ jq \
             total_candidates: ($items | length),
             deleted_count: ([$items[] | select(.action_status == "DELETED")] | length),
             dry_run_simulated_count: ([$items[] | select(.action_status == "DRY_RUN_DELETE_SIMULATED")] | length),
+            deallocated_count: ([$items[] | select(.action_status == "DEALLOCATED_IDLE")] | length),
+            dry_run_deallocated_count: ([$items[] | select(.action_status == "DRY_RUN_DEALLOCATE_SIMULATED")] | length),
             skipped_protected_count: ([$items[] | select(.action_status | test("SKIPPED"))] | length),
             failed_count: ([$items[] | select(.action_status == "DELETE_FAILED")] | length)
         },

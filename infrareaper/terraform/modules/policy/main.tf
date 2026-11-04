@@ -70,6 +70,10 @@ resource "azurerm_policy_definition" "require_mandatory_tags" {
             {
               field  = "tags['expiry-date']"
               exists = "false"
+            },
+            {
+              field    = "tags['expiry-date']"
+              notMatch = "####-##-##"
             }
           ]
         }

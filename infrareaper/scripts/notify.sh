@@ -45,9 +45,13 @@ ACTIONABLE_COUNT=$(jq '.summary.actionable_for_cleanup // 0' "${LIFECYCLE_FILE}"
 
 DEL_COUNT=0
 SIM_COUNT=0
+DEALLOC_COUNT=0
+DEALLOC_SIM_COUNT=0
 if [[ -f "${AUDIT_FILE}" ]]; then
     DEL_COUNT=$(jq '.audit_metadata.deleted_count // 0' "${AUDIT_FILE}")
     SIM_COUNT=$(jq '.audit_metadata.dry_run_simulated_count // 0' "${AUDIT_FILE}")
+    DEALLOC_COUNT=$(jq '.audit_metadata.deallocated_count // 0' "${AUDIT_FILE}")
+    DEALLOC_SIM_COUNT=$(jq '.audit_metadata.dry_run_deallocated_count // 0' "${AUDIT_FILE}")
 fi
 
 TOTAL_EXPIRING=$(( EXP_7D + EXP_72H + EXP_24H + EXP_GRACE ))
@@ -55,8 +59,8 @@ TOTAL_EXPIRING=$(( EXP_7D + EXP_72H + EXP_24H + EXP_GRACE ))
 # ------------------------------------------------------------
 # Smart Anti-Fatigue Filter (No Spam Rule)
 # ------------------------------------------------------------
-# Only notify if there are expiring assets, critical violations, or cleanup actions!
-if [[ ${TOTAL_EXPIRING} -eq 0 && ${ACTIONABLE_COUNT} -eq 0 && ${DEL_COUNT} -eq 0 && ${CRIT_COUNT} -eq 0 ]]; then
+# Only notify if there are expiring assets, critical violations, deallocations, or cleanup actions!
+if [[ ${TOTAL_EXPIRING} -eq 0 && ${ACTIONABLE_COUNT} -eq 0 && ${DEL_COUNT} -eq 0 && ${DEALLOC_COUNT} -eq 0 && ${CRIT_COUNT} -eq 0 ]]; then
     log_info "All resources compliant with 0 expiring assets and 0 cleanup actions."
     log_info "Notification skipped to avoid channel spam (Alert Fatigue Guard active)."
     exit 0
@@ -79,16 +83,22 @@ if [[ -n "${SLACK_WEBHOOK_URL}" ]]; then
 
     # Extract itemized list of cleanup actions
     CLEANUP_LIST="None"
+    IDLE_LIST="None"
     if [[ -f "${AUDIT_FILE}" ]]; then
         CLEANUP_LIST=$(jq -r '
             [.actions[]? | select(.action_status == "DELETED" or .action_status == "DRY_RUN_DELETE_SIMULATED")] |
             if length == 0 then "None"
             else map("• `" + .resource_name + "` - *" + .action_status + "* (" + .resource_type + ")") | .[0:10] | join("\n") end
         ' "${AUDIT_FILE}")
+        IDLE_LIST=$(jq -r '
+            [.actions[]? | select(.action_status == "DEALLOCATED_IDLE" or .action_status == "DRY_RUN_DEALLOCATE_SIMULATED")] |
+            if length == 0 then "None"
+            else map("• `" + .resource_name + "` - *" + .action_status + "* (" + .action_reason + ")") | .[0:10] | join("\n") end
+        ' "${AUDIT_FILE}")
     fi
 
     STATUS_EMOJI="⚠️"
-    if [[ ${CRIT_COUNT} -gt 0 || ${ACTIONABLE_COUNT} -gt 0 || ${DEL_COUNT} -gt 0 ]]; then
+    if [[ ${CRIT_COUNT} -gt 0 || ${ACTIONABLE_COUNT} -gt 0 || ${DEL_COUNT} -gt 0 || ${DEALLOC_COUNT} -gt 0 ]]; then
         STATUS_EMOJI="🚨"
     fi
 
@@ -100,8 +110,10 @@ if [[ -n "${SLACK_WEBHOOK_URL}" ]]; then
         --arg expiring "${TOTAL_EXPIRING}" \
         --arg actionable "${ACTIONABLE_COUNT}" \
         --arg deleted "${DEL_COUNT} real / ${SIM_COUNT} dry-run" \
+        --arg dealloc "${DEALLOC_COUNT} real / ${DEALLOC_SIM_COUNT} dry-run" \
         --arg exp_list "${EXPIRING_LIST}" \
         --arg clean_list "${CLEANUP_LIST}" \
+        --arg idle_list "${IDLE_LIST}" \
         --arg time "$(_timestamp)" \
         '{
             text: ($emoji + " [InfraReaper Alert] " + $env + " | Compliance: " + $score),
@@ -134,6 +146,13 @@ if [[ -n "${SLACK_WEBHOOK_URL}" ]]; then
                     text: {
                         type: "mrkdwn",
                         text: ("*🧹 Cleanup Actions Executed:*\n" + $clean_list)
+                    }
+                },
+                {
+                    type: "section",
+                    text: {
+                        type: "mrkdwn",
+                        text: ("*💤 Idle VMs Auto-Deallocated (Disks Preserved):*\n" + $idle_list)
                     }
                 },
                 {

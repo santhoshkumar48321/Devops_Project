@@ -26,6 +26,7 @@ fi
 NOW_EPOCH=$(date -u +%s)
 EVALUATED_AT="$(_timestamp)"
 DEFAULT_TTL_DAYS=30
+MAX_LEASE_DAYS="${MAX_LEASE_DAYS:-30}"
 GRACE_PERIOD_HOURS=48
 GRACE_PERIOD_SECONDS=$(( GRACE_PERIOD_HOURS * 3600 ))
 UNTAGGED_TTL_HOURS="${UNTAGGED_TTL_HOURS:-0}"
@@ -58,6 +59,16 @@ for (( i=0; i<RESOURCE_COUNT; i++ )); do
             EXPIRY_EPOCH=$(date -u -j -f "%Y-%m-%d %H:%M:%S" "${EXPIRY_DATE} 23:59:59" +%s 2>/dev/null || echo "$(( NOW_EPOCH + 86400 * DEFAULT_TTL_DAYS ))")
         fi
         EFFECTIVE_EXPIRY_DATE="${EXPIRY_DATE}"
+
+        # Enforce Max Lease Cap: prevent developers from setting far-future dates (e.g. 2099)
+        MAX_LEASE_SECONDS=$(( MAX_LEASE_DAYS * 86400 ))
+        MAX_ALLOWED_EPOCH=$(( NOW_EPOCH + MAX_LEASE_SECONDS ))
+        if [[ ${EXPIRY_EPOCH} -gt ${MAX_ALLOWED_EPOCH} ]]; then
+            log_warn "Resource '${RES_NAME}' specified expiry '${EXPIRY_DATE}' which exceeds maximum allowed lease (${MAX_LEASE_DAYS} days)."
+            EXPIRY_EPOCH=${MAX_ALLOWED_EPOCH}
+            EFFECTIVE_EXPIRY_DATE=$(date -u -d "@${EXPIRY_EPOCH}" +"%Y-%m-%d" 2>/dev/null || date -u -r "${EXPIRY_EPOCH}" +"%Y-%m-%d" 2>/dev/null || echo "capped-${MAX_LEASE_DAYS}d")
+            log_info "Expiry date for '${RES_NAME}' has been capped to: ${EFFECTIVE_EXPIRY_DATE} (Max ${MAX_LEASE_DAYS}d Lease Cap enforced)."
+        fi
     elif [[ "${IS_COMPLIANT}" == "false" || "${HAS_CRITICAL}" == "true" ]]; then
         # Case 2: Untagged or policy-violating resource in sandbox/dev environment
         # Enforce Untagged Quarantine Policy: non-compliant resources do NOT receive a 30-day lease!
@@ -132,6 +143,18 @@ for (( i=0; i<RESOURCE_COUNT; i++ )); do
         LIFECYCLE_STATE="ACTIVE"
     fi
 
+    # Idle VM Governance: If VM has <2% CPU for past evaluation window, flag for auto-deallocation
+    IS_IDLE=$(echo "${RES_JSON}" | jq -r '.is_idle // false')
+    AVG_CPU=$(echo "${RES_JSON}" | jq -r '.avg_cpu_percent // empty')
+    ACTION_TYPE="DELETE"
+
+    if [[ "${RES_TYPE}" == "Microsoft.Compute/virtualMachines" && "${IS_IDLE}" == "true" && "${ACTIONABLE_FOR_CLEANUP}" == "false" ]]; then
+        LIFECYCLE_STATE="IDLE_DEALLOCATABLE"
+        ACTIONABLE_FOR_CLEANUP=true
+        ACTION_TYPE="DEALLOCATE_IDLE"
+        log_info "Virtual Machine '${RES_NAME}' is IDLE (Avg CPU: ${AVG_CPU:-0}%). Action: Auto-deallocate to save compute spend."
+    fi
+
     # Append augmented resource record
     UPDATED_RES=$(echo "${RES_JSON}" | jq \
         --arg state "${LIFECYCLE_STATE}" \
@@ -139,12 +162,14 @@ for (( i=0; i<RESOURCE_COUNT; i++ )); do
         --argjson exp_epoch "${EXPIRY_EPOCH}" \
         --argjson delta "${DELTA_SECONDS}" \
         --argjson actionable "${ACTIONABLE_FOR_CLEANUP}" \
+        --arg act_type "${ACTION_TYPE}" \
         '. + {
             lifecycle_state: $state,
             effective_expiry_date: $eff_exp,
             expiry_epoch: $exp_epoch,
             time_to_expiry_seconds: $delta,
-            actionable_for_cleanup: $actionable
+            actionable_for_cleanup: $actionable,
+            action_type: $act_type
         }')
 
     jq --argjson item "${UPDATED_RES}" '. += [$item]' "${TEMP_EVAL_FILE}" > "${TEMP_EVAL_FILE}.tmp"
@@ -171,6 +196,7 @@ jq \
             expiring_24h: ([$resources[] | select(.lifecycle_state == "EXPIRING_24H")] | length),
             expired_in_grace: ([$resources[] | select(.lifecycle_state == "EXPIRED_IN_GRACE")] | length),
             expired_actionable: ([$resources[] | select(.lifecycle_state == "EXPIRED_ACTIONABLE")] | length),
+            idle_deallocatable: ([$resources[] | select(.lifecycle_state == "IDLE_DEALLOCATABLE")] | length),
             actionable_for_cleanup: ([$resources[] | select(.actionable_for_cleanup == true)] | length)
         },
         resources: $resources

@@ -81,6 +81,39 @@ for rg in "${TARGET_RGS[@]}"; do
     RAW_VNETS_FILE="${TEMP_RAW_DIR}/${rg}_vnets.json"
     az network vnet list --resource-group "${rg}" -o json > "${RAW_VNETS_FILE}" 2>/dev/null || echo "[]" > "${RAW_VNETS_FILE}"
 
+    # 7. Collect VM CPU utilization metrics for idle detection
+    log_debug "Evaluating VM CPU utilization metrics in ${rg}..."
+    RAW_VM_METRICS_FILE="${TEMP_RAW_DIR}/${rg}_vm_metrics.json"
+    echo "{}" > "${RAW_VM_METRICS_FILE}"
+
+    VM_IDS=$(jq -r '[.[] | select(.type == "Microsoft.Compute/virtualMachines")] | .[].id' "${RAW_RES_FILE}" 2>/dev/null || echo "")
+
+    VM_METRICS_MAP="{}"
+    for vmid in ${VM_IDS}; do
+        vm_name=$(basename "${vmid}")
+        # Query average CPU percentage over the last 7 days (interval 1 day)
+        CPU_DATA=$(az monitor metrics list \
+            --resource "${vmid}" \
+            --metric "Percentage CPU" \
+            --interval P1D \
+            --aggregation Average \
+            --query "value[0].timeseries[0].data[?average!=null].average" \
+            -o json 2>/dev/null || echo "[]")
+
+        DATA_POINTS=$(echo "${CPU_DATA}" | jq 'length' 2>/dev/null || echo "0")
+        if [[ "${DATA_POINTS}" -ge 1 ]]; then
+            AVG_CPU=$(echo "${CPU_DATA}" | jq 'add / length | (.*100 | round) / 100')
+            IS_IDLE=$(echo "${AVG_CPU}" | jq '. < 2.0')
+            VM_METRICS_MAP=$(echo "${VM_METRICS_MAP}" | jq \
+                --arg id "${vmid,,}" \
+                --argjson avg "${AVG_CPU}" \
+                --argjson idle "${IS_IDLE}" \
+                '. + { ($id): { avg_cpu_percent: $avg, is_idle: $idle } }')
+            log_debug "VM '${vm_name}' 7-day average CPU: ${AVG_CPU}% (Idle: ${IS_IDLE})"
+        fi
+    done
+    echo "${VM_METRICS_MAP}" > "${RAW_VM_METRICS_FILE}"
+
     # Normalize and merge resources for this RG
     MERGED_RG_FILE="${TEMP_RAW_DIR}/${rg}_merged.json"
     SCAN_TIME="$(_timestamp)"
@@ -94,10 +127,12 @@ for rg in "${TARGET_RGS[@]}"; do
         --slurpfile unattached_nics "${RAW_NICS_FILE}" \
         --slurpfile all_nsgs "${RAW_NSGS_FILE}" \
         --slurpfile all_vnets "${RAW_VNETS_FILE}" \
+        --slurpfile vm_metrics "${RAW_VM_METRICS_FILE}" \
         '
         ($unattached_disks[0] // [] | map(.id | ascii_downcase)) as $orphan_disk_ids |
         ($unassociated_ips[0] // [] | map(.id | ascii_downcase)) as $orphan_ip_ids |
         ($unattached_nics[0] // [] | map(.id | ascii_downcase)) as $orphan_nic_ids |
+        ($vm_metrics[0] // {}) as $metrics_map |
 
         # Identify empty VNets: VNets with 0 subnets or where every subnet has 0 connected IP configurations
         ($all_vnets[0] // [] | map(select(
@@ -119,33 +154,37 @@ for rg in "${TARGET_RGS[@]}"; do
             )
         )) | map(.id | ascii_downcase)) as $orphan_nsg_ids |
 
-        ($standard[0] // []) | map({
-            id: .id,
-            name: .name,
-            type: .type,
-            resourceGroup: ($rg),
-            location: .location,
-            tags: (.tags // {}),
-            is_orphan: (
-                (.id | ascii_downcase) as $item_id |
-                ($orphan_disk_ids | index($item_id)) != null or
-                ($orphan_ip_ids | index($item_id)) != null or
-                ($orphan_nic_ids | index($item_id)) != null or
-                ($orphan_nsg_ids | index($item_id)) != null or
-                ($orphan_vnet_ids | index($item_id)) != null
-            ),
-            orphan_type: (
-                (.id | ascii_downcase) as $item_id |
-                if ($orphan_disk_ids | index($item_id)) != null then "unattached_disk"
-                elif ($orphan_ip_ids | index($item_id)) != null then "unassociated_public_ip"
-                elif ($orphan_nic_ids | index($item_id)) != null then "unattached_nic"
-                elif ($orphan_nsg_ids | index($item_id)) != null then "unassociated_nsg"
-                elif ($orphan_vnet_ids | index($item_id)) != null then "empty_vnet"
-                else null end
-            ),
-            created_time: (.createdTime // null),
-            scanned_at: $scan_time
-        })
+        ($standard[0] // []) | map(
+            (.id | ascii_downcase) as $item_id |
+            ($metrics_map[$item_id] // {}) as $res_metric |
+            {
+                id: .id,
+                name: .name,
+                type: .type,
+                resourceGroup: ($rg),
+                location: .location,
+                tags: (.tags // {}),
+                is_orphan: (
+                    ($orphan_disk_ids | index($item_id)) != null or
+                    ($orphan_ip_ids | index($item_id)) != null or
+                    ($orphan_nic_ids | index($item_id)) != null or
+                    ($orphan_nsg_ids | index($item_id)) != null or
+                    ($orphan_vnet_ids | index($item_id)) != null
+                ),
+                orphan_type: (
+                    if ($orphan_disk_ids | index($item_id)) != null then "unattached_disk"
+                    elif ($orphan_ip_ids | index($item_id)) != null then "unassociated_public_ip"
+                    elif ($orphan_nic_ids | index($item_id)) != null then "unattached_nic"
+                    elif ($orphan_nsg_ids | index($item_id)) != null then "unassociated_nsg"
+                    elif ($orphan_vnet_ids | index($item_id)) != null then "empty_vnet"
+                    else null end
+                ),
+                is_idle: ($res_metric.is_idle // false),
+                avg_cpu_percent: ($res_metric.avg_cpu_percent // null),
+                created_time: (.createdTime // null),
+                scanned_at: $scan_time
+            }
+        )
         ' > "${MERGED_RG_FILE}"
 
     # Append to cumulative list

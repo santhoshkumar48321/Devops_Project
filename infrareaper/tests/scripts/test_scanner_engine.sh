@@ -255,6 +255,79 @@ NET_AUDIT_JSON="${TEST_TMP_DIR}/cleanup-audit.json"
 NET_SIMULATED_DELETES=$(jq '.audit_metadata.dry_run_simulated_count' "${NET_AUDIT_JSON}")
 assert_equals "2" "${NET_SIMULATED_DELETES}" "Dry run simulates deletion of sandbox empty VNet and unused NSG"
 
+# ------------------------------------------------------------
+# TEST 6: Max Lease Cap and Idle VM Auto-Deallocation Verification
+# ------------------------------------------------------------
+echo ""
+echo "Test Suite 6: Max Lease Cap & Idle VM Auto-Deallocation"
+
+MOCK_IDLE_INVENTORY="${TEST_TMP_DIR}/idle_inventory.json"
+cat <<EOF > "${MOCK_IDLE_INVENTORY}"
+{
+  "metadata": {
+    "scanned_at": "2026-10-27T00:00:00Z",
+    "target_resource_groups": ["infrareaper-test-resources"],
+    "total_resources": 2,
+    "orphan_count": 0
+  },
+  "resources": [
+    {
+      "id": "/subscriptions/sub/resourceGroups/infrareaper-test-resources/providers/Microsoft.Compute/virtualMachines/test-cheater-vm",
+      "name": "test-cheater-vm",
+      "type": "Microsoft.Compute/virtualMachines",
+      "resourceGroup": "infrareaper-test-resources",
+      "location": "centralindia",
+      "tags": {
+        "owner": "santhosh@example.com",
+        "environment": "dev",
+        "expiry-date": "2099-12-31"
+      },
+      "is_orphan": false,
+      "orphan_type": null,
+      "is_idle": false,
+      "avg_cpu_percent": 15.4
+    },
+    {
+      "id": "/subscriptions/sub/resourceGroups/infrareaper-test-resources/providers/Microsoft.Compute/virtualMachines/test-idle-vm",
+      "name": "test-idle-vm",
+      "type": "Microsoft.Compute/virtualMachines",
+      "resourceGroup": "infrareaper-test-resources",
+      "location": "centralindia",
+      "tags": {
+        "owner": "santhosh@example.com",
+        "environment": "dev",
+        "expiry-date": "2026-12-31"
+      },
+      "is_orphan": false,
+      "orphan_type": null,
+      "is_idle": true,
+      "avg_cpu_percent": 0.85
+    }
+  ]
+}
+EOF
+
+cp "${MOCK_IDLE_INVENTORY}" "${TEST_TMP_DIR}/inventory.json"
+bash "${SCRIPTS_DIR}/evaluate-policies.sh"
+export MAX_LEASE_DAYS="30"
+bash "${SCRIPTS_DIR}/check-expiry.sh"
+
+IDLE_LIFECYCLE_JSON="${TEST_TMP_DIR}/lifecycle-report.json"
+CHEATER_EFF_EXP=$(jq -r '.resources[] | select(.name == "test-cheater-vm") | .effective_expiry_date' "${IDLE_LIFECYCLE_JSON}")
+IDLE_STATE=$(jq -r '.resources[] | select(.name == "test-idle-vm") | .lifecycle_state' "${IDLE_LIFECYCLE_JSON}")
+IDLE_ACTION=$(jq -r '.resources[] | select(.name == "test-idle-vm") | .action_type' "${IDLE_LIFECYCLE_JSON}")
+
+# Verify 2099 was capped to roughly 30 days from now (not 2099!)
+IS_CAPPED=$(echo "${CHEATER_EFF_EXP}" | grep -c "2099" || true)
+assert_equals "0" "${IS_CAPPED}" "Cheater expiry date 2099 was successfully capped to max 30-day lease"
+assert_equals "IDLE_DEALLOCATABLE" "${IDLE_STATE}" "Idle VM with <2% CPU flagged as IDLE_DEALLOCATABLE"
+assert_equals "DEALLOCATE_IDLE" "${IDLE_ACTION}" "Idle VM action set to DEALLOCATE_IDLE"
+
+bash "${SCRIPTS_DIR}/cleanup.sh"
+IDLE_AUDIT_JSON="${TEST_TMP_DIR}/cleanup-audit.json"
+IDLE_SIM_DEALLOC=$(jq '.audit_metadata.dry_run_deallocated_count' "${IDLE_AUDIT_JSON}")
+assert_equals "1" "${IDLE_SIM_DEALLOC}" "Dry run simulates deallocation of idle VM instead of deleting"
+
 echo ""
 echo "============================================================"
 if [[ ${FAILED_TESTS} -eq 0 ]]; then
