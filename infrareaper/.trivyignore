@@ -56,3 +56,7 @@ CVE-2025-47273
 # urllib3: Proxy override & chunk parser unbounded memory
 CVE-2026-97687
 CVE-2026-97689
+
+
+# oauthlib: Privilege escalation via client identity confusion in token grant handlers (Scanner does not implement an OAuth provider/grant handler)
+CVE-2026-118669
