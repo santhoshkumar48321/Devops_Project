@@ -174,6 +174,87 @@ HAS_SCORE_METRIC=$(grep -c "^infrareaper_compliance_score{" "${METRICS_FILE}" ||
 assert_equals "1" "${HAS_TOTAL_METRIC}" "Prometheus gauge metric line present for infrareaper_resources_total"
 assert_equals "1" "${HAS_SCORE_METRIC}" "Prometheus gauge metric line present for infrareaper_compliance_score"
 
+# ------------------------------------------------------------
+# TEST 5: Empty VNet and Unused NSG Lifecycle & Cleanup Verification
+# ------------------------------------------------------------
+echo ""
+echo "Test Suite 5: Empty VNet & Unused NSG Governance"
+
+MOCK_NET_INVENTORY="${TEST_TMP_DIR}/net_inventory.json"
+cat <<EOF > "${MOCK_NET_INVENTORY}"
+{
+  "metadata": {
+    "scanned_at": "2026-10-27T00:00:00Z",
+    "target_resource_groups": ["infrareaper-test-resources", "infrareaper-core-rg"],
+    "total_resources": 3,
+    "orphan_count": 3
+  },
+  "resources": [
+    {
+      "id": "/subscriptions/sub/resourceGroups/infrareaper-test-resources/providers/Microsoft.Network/virtualNetworks/test-sandbox-vnet",
+      "name": "test-sandbox-vnet",
+      "type": "Microsoft.Network/virtualNetworks",
+      "resourceGroup": "infrareaper-test-resources",
+      "location": "centralindia",
+      "tags": {
+        "owner": "santhosh@example.com",
+        "environment": "dev",
+        "expiry-date": "2026-12-31"
+      },
+      "is_orphan": true,
+      "orphan_type": "empty_vnet"
+    },
+    {
+      "id": "/subscriptions/sub/resourceGroups/infrareaper-test-resources/providers/Microsoft.Network/networkSecurityGroups/test-sandbox-nsg",
+      "name": "test-sandbox-nsg",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "resourceGroup": "infrareaper-test-resources",
+      "location": "centralindia",
+      "tags": {
+        "owner": "santhosh@example.com",
+        "environment": "dev",
+        "expiry-date": "2026-12-31"
+      },
+      "is_orphan": true,
+      "orphan_type": "unassociated_nsg"
+    },
+    {
+      "id": "/subscriptions/sub/resourceGroups/infrareaper-core-rg/providers/Microsoft.Network/virtualNetworks/core-aks-vnet",
+      "name": "core-aks-vnet",
+      "type": "Microsoft.Network/virtualNetworks",
+      "resourceGroup": "infrareaper-core-rg",
+      "location": "centralindia",
+      "tags": {
+        "owner": "santhosh@example.com",
+        "environment": "prod",
+        "expiry-date": "2026-12-31"
+      },
+      "is_orphan": true,
+      "orphan_type": "empty_vnet"
+    }
+  ]
+}
+EOF
+
+# Copy mock inventory as current inventory for net test
+cp "${MOCK_NET_INVENTORY}" "${TEST_TMP_DIR}/inventory.json"
+bash "${SCRIPTS_DIR}/evaluate-policies.sh"
+bash "${SCRIPTS_DIR}/check-expiry.sh"
+
+NET_LIFECYCLE_JSON="${TEST_TMP_DIR}/lifecycle-report.json"
+SANDBOX_VNET_ACTIONABLE=$(jq -r '.resources[] | select(.name == "test-sandbox-vnet") | .actionable_for_cleanup' "${NET_LIFECYCLE_JSON}")
+SANDBOX_NSG_ACTIONABLE=$(jq -r '.resources[] | select(.name == "test-sandbox-nsg") | .actionable_for_cleanup' "${NET_LIFECYCLE_JSON}")
+CORE_VNET_ACTIONABLE=$(jq -r '.resources[] | select(.name == "core-aks-vnet") | .actionable_for_cleanup' "${NET_LIFECYCLE_JSON}")
+
+assert_equals "true" "${SANDBOX_VNET_ACTIONABLE}" "Empty sandbox VNet in test RG flagged as actionable for cleanup"
+assert_equals "true" "${SANDBOX_NSG_ACTIONABLE}" "Unused NSG in test RG flagged as actionable for cleanup"
+assert_equals "false" "${CORE_VNET_ACTIONABLE}" "Core VNet in infrareaper-core-rg strictly protected from cleanup"
+
+bash "${SCRIPTS_DIR}/cleanup.sh"
+NET_AUDIT_JSON="${TEST_TMP_DIR}/cleanup-audit.json"
+NET_SIMULATED_DELETES=$(jq '.audit_metadata.dry_run_simulated_count' "${NET_AUDIT_JSON}")
+assert_equals "2" "${NET_SIMULATED_DELETES}" "Dry run simulates deletion of sandbox empty VNet and unused NSG"
+
 echo ""
 echo "============================================================"
 if [[ ${FAILED_TESTS} -eq 0 ]]; then

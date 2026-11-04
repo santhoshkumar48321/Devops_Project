@@ -110,11 +110,19 @@ for (( i=0; i<RESOURCE_COUNT; i++ )); do
         ACTIONABLE_FOR_CLEANUP=true
     fi
 
-    # Safety Barrier: Virtual Networks must never be marked for cleanup
+    # Safety Barrier: Virtual Networks are protected UNLESS they are confirmed empty orphan VNets in allowed test cleanup scopes
     RES_TYPE=$(echo "${RES_JSON}" | jq -r '.type')
+    RES_RG=$(echo "${RES_JSON}" | jq -r '.resourceGroup')
+    ORPHAN_TYPE=$(echo "${RES_JSON}" | jq -r '.orphan_type // empty')
     if [[ "${RES_TYPE}" == "Microsoft.Network/virtualNetworks" ]]; then
-        ACTIONABLE_FOR_CLEANUP=false
-        LIFECYCLE_STATE="ACTIVE"
+        if [[ "${IS_ORPHAN}" == "true" && "${ORPHAN_TYPE}" == "empty_vnet" && "${RES_RG}" == "infrareaper-test-resources" ]]; then
+            ACTIONABLE_FOR_CLEANUP=true
+            LIFECYCLE_STATE="EXPIRED_ACTIONABLE"
+            log_info "Virtual Network '${RES_NAME}' in '${RES_RG}' is an EMPTY VNET. Action: Actionable for cleanup."
+        else
+            ACTIONABLE_FOR_CLEANUP=false
+            LIFECYCLE_STATE="ACTIVE"
+        fi
     fi
 
     # Safety Barrier: NICs and Disks attached to active VMs must not be deleted standalone

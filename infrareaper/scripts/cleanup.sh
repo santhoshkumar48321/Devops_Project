@@ -39,14 +39,18 @@ echo "[]" > "${AUDIT_ACTIONS_TEMP}"
 
 # Extract all resources flagged as actionable, sorted by dependency order:
 # 1. Virtual Machines (must delete before NICs/Disks)
-# 2. Network Interfaces (must delete before Public IPs/NSGs)
-# 3. Disks, Public IPs, NSGs, Storage Accounts
+# 2. Network Interfaces (must delete before Public IPs/NSGs/VNets)
+# 3. Virtual Networks (empty VNets; dissociate subnet NSGs first)
+# 4. Network Security Groups (must delete after subnets/NICs are detached)
+# 5. Disks, Public IPs, Storage Accounts
 CANDIDATES_JSON=$(jq -c '
     [.resources[] | select(.actionable_for_cleanup == true)] |
     sort_by(
         if .type == "Microsoft.Compute/virtualMachines" then 1
         elif .type == "Microsoft.Network/networkInterfaces" then 2
-        else 3 end
+        elif .type == "Microsoft.Network/virtualNetworks" then 3
+        elif .type == "Microsoft.Network/networkSecurityGroups" then 4
+        else 5 end
     )
 ' "${LIFECYCLE_FILE}")
 CANDIDATE_COUNT=$(echo "${CANDIDATES_JSON}" | jq 'length')
@@ -109,7 +113,6 @@ for (( i=0; i<CANDIDATE_COUNT; i++ )); do
             "Microsoft.ContainerRegistry/registries"
             "Microsoft.KeyVault/vaults"
             "Microsoft.OperationalInsights/workspaces"
-            "Microsoft.Network/virtualNetworks"
         )
         for ptype in "${PROTECTED_TYPES[@]}"; do
             if [[ "${RES_TYPE}" == "${ptype}" ]]; then
@@ -119,6 +122,15 @@ for (( i=0; i<CANDIDATE_COUNT; i++ )); do
                 break
             fi
         done
+
+        # Safety Guard for Virtual Networks: Only empty orphan VNets are eligible
+        if [[ -z "${ACTION_STATUS}" && "${RES_TYPE}" == "Microsoft.Network/virtualNetworks" ]]; then
+            if [[ "${IS_ORPHAN}" != "true" || "${ORPHAN_TYPE}" != "empty_vnet" ]]; then
+                log_warn "[SAFETY GUARD] Resource '${RES_NAME}' is an active Virtual Network. Deletion DENIED."
+                ACTION_STATUS="PROTECTED_TYPE_SKIPPED"
+                ACTION_REASON="Active Virtual Network is protected infrastructure"
+            fi
+        fi
 
         # Check tags for protected flag
         IS_PROTECTED_TAG=$(echo "${RES}" | jq -r '
@@ -201,6 +213,14 @@ for (( i=0; i<CANDIDATE_COUNT; i++ )); do
                 fi
             elif [[ "${RES_TYPE}" == "Microsoft.Network/networkInterfaces" ]]; then
                 DEL_ERR=$(az network nic delete --name "${RES_NAME}" --resource-group "${RES_RG}" 2>&1) || EXEC_SUCCESS=false
+            elif [[ "${RES_TYPE}" == "Microsoft.Network/virtualNetworks" ]]; then
+                log_info "Dissociating any subnet NSGs before deleting Virtual Network '${RES_NAME}'..."
+                SUBNET_NAMES=$(az network vnet subnet list --resource-group "${RES_RG}" --vnet-name "${RES_NAME}" --query "[?networkSecurityGroup!=null].name" -o tsv 2>/dev/null || true)
+                for sname in ${SUBNET_NAMES}; do
+                    log_info "Dissociating NSG from subnet '${sname}' in VNet '${RES_NAME}'..."
+                    az network vnet subnet update --resource-group "${RES_RG}" --vnet-name "${RES_NAME}" --name "${sname}" --network-security-group null 2>/dev/null || true
+                done
+                DEL_ERR=$(az network vnet delete --name "${RES_NAME}" --resource-group "${RES_RG}" 2>&1) || EXEC_SUCCESS=false
             elif [[ "${RES_TYPE}" == "Microsoft.Network/networkSecurityGroups" ]]; then
                 DEL_ERR=$(az network nsg delete --name "${RES_NAME}" --resource-group "${RES_RG}" 2>&1) || EXEC_SUCCESS=false
             else

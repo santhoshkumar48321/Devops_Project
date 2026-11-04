@@ -71,10 +71,15 @@ for rg in "${TARGET_RGS[@]}"; do
     RAW_NICS_FILE="${TEMP_RAW_DIR}/${rg}_nics.json"
     az network nic list --resource-group "${rg}" --query "[?virtualMachine==null]" -o json > "${RAW_NICS_FILE}" 2>/dev/null || echo "[]" > "${RAW_NICS_FILE}"
 
-    # 5. Query unassociated NSGs (not attached to any NIC or subnet)
-    log_debug "Querying unassociated NSGs in ${rg}..."
+    # 5. Query all network security groups in ${rg}
+    log_debug "Querying network security groups in ${rg}..."
     RAW_NSGS_FILE="${TEMP_RAW_DIR}/${rg}_nsgs.json"
-    az network nsg list --resource-group "${rg}" --query "[?length(networkInterfaces)==\`0\` && length(subnets)==\`0\`]" -o json > "${RAW_NSGS_FILE}" 2>/dev/null || echo "[]" > "${RAW_NSGS_FILE}"
+    az network nsg list --resource-group "${rg}" -o json > "${RAW_NSGS_FILE}" 2>/dev/null || echo "[]" > "${RAW_NSGS_FILE}"
+
+    # 6. Query virtual networks and identify empty VNets (no NICs/devices attached to any subnet)
+    log_debug "Querying virtual networks in ${rg}..."
+    RAW_VNETS_FILE="${TEMP_RAW_DIR}/${rg}_vnets.json"
+    az network vnet list --resource-group "${rg}" -o json > "${RAW_VNETS_FILE}" 2>/dev/null || echo "[]" > "${RAW_VNETS_FILE}"
 
     # Normalize and merge resources for this RG
     MERGED_RG_FILE="${TEMP_RAW_DIR}/${rg}_merged.json"
@@ -87,12 +92,32 @@ for rg in "${TARGET_RGS[@]}"; do
         --slurpfile unattached_disks "${RAW_DISKS_FILE}" \
         --slurpfile unassociated_ips "${RAW_IPS_FILE}" \
         --slurpfile unattached_nics "${RAW_NICS_FILE}" \
-        --slurpfile unassociated_nsgs "${RAW_NSGS_FILE}" \
+        --slurpfile all_nsgs "${RAW_NSGS_FILE}" \
+        --slurpfile all_vnets "${RAW_VNETS_FILE}" \
         '
         ($unattached_disks[0] // [] | map(.id | ascii_downcase)) as $orphan_disk_ids |
         ($unassociated_ips[0] // [] | map(.id | ascii_downcase)) as $orphan_ip_ids |
         ($unattached_nics[0] // [] | map(.id | ascii_downcase)) as $orphan_nic_ids |
-        ($unassociated_nsgs[0] // [] | map(.id | ascii_downcase)) as $orphan_nsg_ids |
+
+        # Identify empty VNets: VNets with 0 subnets or where every subnet has 0 connected IP configurations
+        ($all_vnets[0] // [] | map(select(
+            ([.subnets[]? | (.ipConfigurations // [])[]] | length) == 0
+        ))) as $empty_vnets |
+        ($empty_vnets | map(.id | ascii_downcase)) as $orphan_vnet_ids |
+        ($empty_vnets | [.[].subnets[]?.id | ascii_downcase]) as $empty_subnet_ids |
+
+        # Identify unassociated/unused NSGs:
+        # NSGs with 0 NICs AND either 0 subnets OR subnets belonging entirely to empty VNets
+        ($all_nsgs[0] // [] | map(select(
+            ((.networkInterfaces // []) | length) == 0 and
+            (
+                ((.subnets // []) | length) == 0 or
+                (
+                    ((.subnets // []) | length) > 0 and
+                    ([.subnets[]? | select(($empty_subnet_ids | index(.id | ascii_downcase)) == null)] | length) == 0
+                )
+            )
+        )) | map(.id | ascii_downcase)) as $orphan_nsg_ids |
 
         ($standard[0] // []) | map({
             id: .id,
@@ -106,7 +131,8 @@ for rg in "${TARGET_RGS[@]}"; do
                 ($orphan_disk_ids | index($item_id)) != null or
                 ($orphan_ip_ids | index($item_id)) != null or
                 ($orphan_nic_ids | index($item_id)) != null or
-                ($orphan_nsg_ids | index($item_id)) != null
+                ($orphan_nsg_ids | index($item_id)) != null or
+                ($orphan_vnet_ids | index($item_id)) != null
             ),
             orphan_type: (
                 (.id | ascii_downcase) as $item_id |
@@ -114,6 +140,7 @@ for rg in "${TARGET_RGS[@]}"; do
                 elif ($orphan_ip_ids | index($item_id)) != null then "unassociated_public_ip"
                 elif ($orphan_nic_ids | index($item_id)) != null then "unattached_nic"
                 elif ($orphan_nsg_ids | index($item_id)) != null then "unassociated_nsg"
+                elif ($orphan_vnet_ids | index($item_id)) != null then "empty_vnet"
                 else null end
             ),
             created_time: (.createdTime // null),

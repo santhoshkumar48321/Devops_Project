@@ -19,7 +19,7 @@ protected_resource_types:
   - "Microsoft.ContainerRegistry/registries"
   - "Microsoft.KeyVault/vaults"
   - "Microsoft.OperationalInsights/workspaces"
-  - "Microsoft.Network/virtualNetworks"  # Platform networking backbone is strictly preserved
+  # Note: Virtual Networks in core infrastructure RGs (infrareaper-core-rg) are strictly protected by protected_resource_groups. Empty sandbox VNets in infrareaper-test-resources are eligible for orphan cleanup.
   - "Microsoft.Storage/storageAccounts" # Guarded at core, only test RG storage can be touched
 
 protected_tags:
