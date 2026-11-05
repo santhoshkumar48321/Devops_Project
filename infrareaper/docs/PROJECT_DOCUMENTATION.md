@@ -92,6 +92,11 @@ InfraReaper transforms governance from a reactive audit exercise into an automat
 ## 2. End-to-End System Architecture
 
 ### 2.1 Global Architecture & Component Interaction
+
+<p align="center">
+  <img src="images/infrareaper-architecture.png" alt="InfraReaper Architecture Specification" width="100%">
+</p>
+
 InfraReaper coordinates across on-premises automation infrastructure, Azure managed PaaS services, and a hardened AKS containerized runtime:
 
 ```

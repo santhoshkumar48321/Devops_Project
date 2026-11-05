@@ -18,3 +18,4 @@ ansible-lint infrareaper/ansible/playbooks/setup-lab-server.yml
 # 2. Syntax Check
 ansible-playbook --syntax-check -i infrareaper/ansible/inventory/hosts.yml infrareaper/ansible/playbooks/setup-lab-server.yml
 ```
+

@@ -18,3 +18,4 @@ terraform -chdir=infrareaper/terraform/environments/dev validate
 # 2. Run Trivy IaC security scan
 trivy config infrareaper/terraform/
 ```
+

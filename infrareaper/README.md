@@ -32,6 +32,10 @@ Cloud waste averages **25%–35% of enterprise cloud spend**, driven by orphaned
 
 ## 🏗️ Architecture
 
+<p align="center">
+  <img src="docs/images/infrareaper-architecture.png" alt="InfraReaper Architecture" width="100%">
+</p>
+
 ```
                        ┌───────────────────────────────────────────────────────────────┐
                        │                   Azure Cloud Infrastructure                  │

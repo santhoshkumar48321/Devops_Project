@@ -20,3 +20,4 @@ kubectl kustomize infrareaper/kubernetes/monitoring > /dev/null
 # 2. Run Trivy Config Scan
 trivy config infrareaper/kubernetes/
 ```
+
