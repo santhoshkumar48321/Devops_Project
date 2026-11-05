@@ -130,6 +130,7 @@ make port-forward-grafana
 
 ## 📖 Complete Documentation
 
+- [**Master End-to-End Specification**](docs/PROJECT_DOCUMENTATION.md)
 - [Architecture Specification](docs/architecture.md)
 - [Requirements & Specifications](docs/requirements.md)
 - [Deployment Guide](docs/deployment-guide.md)

@@ -1,2 +1,20 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Enforce LF line endings for shell scripts and Makefiles (prevents \r issues in Linux containers)
+*.sh text eol=lf
+*.bash text eol=lf
+Makefile text eol=lf
+
+# Enforce LF for configuration manifests
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.tf text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary

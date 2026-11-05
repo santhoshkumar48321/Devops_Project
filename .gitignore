@@ -1,0 +1,66 @@
+# ============================================================
+# InfraReaper Global .gitignore
+# ============================================================
+
+# ----- Terraform -----
+# State files contain sensitive data (passwords, keys, IPs)
+# Remote backend lives in Azure Storage Account
+*.tfstate
+*.tfstate.*
+*.tfplan
+.terraform/
+.terraform.lock.hcl
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+*.tfvars
+!example.tfvars
+!**/terraform.tfvars
+
+# ----- Ansible -----
+*.retry
+ansible/vault_password
+ansible/.vault_pass
+
+# ----- Docker -----
+docker-compose.override.yml
+
+# ----- Kubernetes -----
+kubeconfig
+*.kubeconfig
+kustomize-build/
+
+# ----- Secrets & Credentials -----
+.env
+.env.*
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+credentials/
+**/secret*.yaml
+!**/external-secret.yaml
+
+# ----- IDE & Operating System -----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ----- Temporary & Build Artifacts -----
+*.tmp
+*.bak
+*.orig
+__pycache__/
+*.py[cod]
+.coverage
+build/
+dist/

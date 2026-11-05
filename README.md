@@ -185,30 +185,39 @@ Stage 5: Live Smoke Test Verification
 
 ```
 Devops_Project/
-├── azure-pipelines.yml                       # Root CI/CD pipeline entrypoint
+├── .gitattributes                            # Git line-ending normalization (LF for shell scripts)
+├── .gitignore                                # Global git ignore patterns (secrets, tfstate, IDE)
+├── LICENSE                                   # MIT Open-Source License
+├── README.md                                 # Project overview, architecture & quickstart
+├── azure-pipelines.yml                       # Multi-stage CI/CD pipeline entrypoint
 └── infrareaper/
     ├── Makefile                              # Developer & CI command orchestration
-    ├── .trivyignore                          # Documented CVE suppression baseline
+    ├── .dockerignore                         # Docker build context exclusions
+    ├── .gitignore                            # Component-level ignore rules
     ├── .hadolint.yaml                        # Dockerfile linting rules
+    ├── .pre-commit-config.yaml               # Git pre-commit hooks
+    ├── .trivyignore                          # Documented CVE suppression baseline
     ├── ansible/                              # Lab server configuration & AzDO agent role
     ├── docker/                               # Hardened non-root Dockerfile (Azure Linux 3.0)
-    ├── docs/                                 # Architecture, requirements, runbooks, guides
+    ├── docs/                                 # Complete documentation suite
+    │   ├── PROJECT_DOCUMENTATION.md          # 📖 Master End-to-End Technical Specification
     │   ├── architecture.md                   # Micro-architecture & network topology
-    │   ├── requirements.md                   # Functional & non-functional requirements
     │   ├── deployment-guide.md               # End-to-end installation runbook
     │   ├── monitoring-guide.md               # Metrics dictionary & dashboard architecture
-    │   ├── security-model.md                 # Least-privilege RBAC & network security
-    │   └── runbook.md                        # Operations & disaster recovery runbook
+    │   ├── requirements.md                   # Functional & non-functional requirements
+    │   ├── runbook.md                        # Operations & disaster recovery runbook
+    │   └── security-model.md                 # Least-privilege RBAC & network security
     ├── kubernetes/                           # K8s manifests & Kustomize overlays
     │   ├── base/                             # CronJob, ServiceAccount, NetworkPolicy, ConfigMaps
     │   ├── overlays/dev/                     # DRY_RUN=true, image:dev
     │   ├── overlays/prod/                    # DRY_RUN=false, image:v1.0.0
     │   └── monitoring/                       # Prometheus, Pushgateway, Alertmanager, Loki, Grafana
     ├── pipelines/                            # Azure DevOps multi-stage pipeline templates
+    │   └── templates/                        # 6 reusable stage templates (lint, scan, tf, build, deploy, test)
     ├── policies/                             # Tag policies, lifecycle rules, protected resources
     ├── scripts/                              # Core scanner engine (Bash + az + jq)
     ├── terraform/                            # Modular cloud infrastructure (dev/prod)
-    └── tests/                                # Test suites for scanner & policies
+    └── tests/                                # Test automation suites for scanner, k8s, ansible & tf
 ```
 
 ---
